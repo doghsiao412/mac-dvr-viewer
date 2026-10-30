@@ -1,0 +1,41 @@
+# Secrets — never commit
+.env
+*.env.local
+probe-report*.json
+credentials*.json
+
+# 封包、監視影像與分析輸出 — 只保留在本機
+captures/
+*.pcap
+*.pcapng
+*.h264
+*.h265
+*.hevc
+*.mp4
+*.mov
+*.avi
+*.jpg
+!docs/**/*.jpg
+*.report.md
+
+# Node
+node_modules/
+backend/data/
+backend/downloads/
+
+# Xcode / Swift
+mac/build/
+mac/**/.build/
+mac/**/.swiftpm/
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+dist/
+
+# Python
+__pycache__/
+*.pyc
+
+.DS_Store
