@@ -40,6 +40,9 @@ struct ContentView: View {
             .animation(.snappy, value: store.toast)
         }
         .toolbar {
+            if !store.exports.jobs.isEmpty {
+                ToolbarItem(placement: .primaryAction) { ExportToolbarButton() }
+            }
             ToolbarItem(placement: .principal) {
                 Picker("模式", selection: $store.mode) {
                     ForEach(ViewMode.allCases) { m in

@@ -7,6 +7,8 @@ struct DeviceConfig: Codable, Identifiable, Hashable {
     var host: String
     var port: Int
     var username: String
+    /// TVT 私有協定（SERVICE）連接埠；DVR 韌體不支援網頁串流時使用。nil = 6036
+    var servicePort: Int?
     /// 頻道 ID → 自訂名稱
     var channelAliases: [String: String] = [:]
     /// 自訂頻道順序（頻道 ID）；未列出的頻道排在後面

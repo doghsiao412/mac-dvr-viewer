@@ -8,12 +8,21 @@ Mac SwiftUI App ─▶ macOS 原生網路層（Network.framework）─▶ DVR／
 
 不依賴 NAS、Docker、Node.js、Electron 或常駐伺服器。
 
+## 下載
+
+[GitHub Releases](https://github.com/doghsiao412/mac-dvr-viewer/releases) 下載 `DVR-Viewer-0.1.zip`，解壓後把 **DVR Viewer.app** 拖到「應用程式」。
+
+* 需求：Apple Silicon Mac、macOS 15 以上
+* 此版本未經 Apple 公證（ad-hoc 簽章）。第一次開啟若出現「無法驗證開發者」：在 App 上按右鍵 →「打開」，或到「系統設定 → 隱私權與安全性」按「強制打開」
+* 支援 TVT（及 OEM）NVMS-9000 系列 DVR／NVR：新韌體走網頁 WebSocket，舊韌體自動改用 TVT 私有協定（Port 6036）
+* ⚠️ 這類 DVR 以未加密方式傳送登入資訊，經網際網路連線時建議使用 VPN
+
 ## 目前狀態
 
-**Phase 3：macOS App 開發中**（見 [docs/progress.md](docs/progress.md)）
+**v0.1**（見 [docs/progress.md](docs/progress.md)）
 
 已在實體 DVR（TVT TD-2716NE-HC，NVMS-9000）驗證：登入、設備資訊、頻道、即時 H.265 串流、錄影查詢、錄影回放串流、VideoToolbox 硬體解碼（截圖）。
-macOS App（DVR Viewer）已在實體 DVR 確認可用（即時畫面與錄影回放）：設備管理、1/4/9/16 分割即時畫面、24 小時時間軸回放。尚未完成：錄影下載。證據見 [docs/test-results.md](docs/test-results.md)（Mock 與實體分開標示）。
+macOS App（DVR Viewer）已在實體 DVR 確認可用（即時畫面與錄影回放）：設備管理、1/4/9/16 分割即時畫面、24 小時時間軸回放。錄影下載：回放畫面按 ⌘D，存成 MP4（不轉碼）。證據見 [docs/test-results.md](docs/test-results.md)（Mock 與實體分開標示）。
 
 ### 執行 App
 

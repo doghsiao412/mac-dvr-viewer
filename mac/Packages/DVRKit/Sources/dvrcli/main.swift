@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreMedia
 import DVRKit
 import Foundation
@@ -20,6 +21,8 @@ extension Data {
 //   swift run dvrcli <host> <port> <user> snapshot <頻道序號> [--main] [--frames 30]
 //   swift run dvrcli <host> <port> <user> playertest live <頻道>
 //   swift run dvrcli <host> <port> <user> playertest playback <頻道> "<yyyy-MM-dd HH:mm:ss>"
+//   swift run dvrcli <host> <port> <user> chcheck <yyyy-MM-dd>     # 逐頻道驗證回放頻道正確
+//   swift run dvrcli <host> <port> <user> export <頻道> "<yyyy-MM-dd HH:mm:ss>" <秒數> [--main]   # 下載錄影成 MP4
 //   swift run dvrcli decode <captures/*.bin>              # 離線解碼，不連 DVR
 //   swift run dvrcli <host> <port> <user> raw <指令> [xml-inner]
 //
@@ -30,21 +33,28 @@ extension Data {
 
 setvbuf(stdout, nil, _IOLBF, 0)
 
+/// 埠號（供 Keychain 項目 "user@host:port" 格式查找）
+nonisolated(unsafe) var devPort: Int?
+
 func devPassword(user: String, host: String) throws -> String {
-    let p = Process()
-    p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-    p.arguments = ["find-generic-password", "-s", "DVRViewer.dev", "-a", "\(user)@\(host)", "-w"]
-    let out = Pipe()
-    p.standardOutput = out
-    p.standardError = Pipe()
-    try p.run()
-    p.waitUntilExit()
-    guard p.terminationStatus == 0 else {
-        throw NVMSError.transport("Keychain 找不到 \(user)@\(host)，請先執行 tools/dvr-credentials.sh set \(host) \(user)")
+    // 依序嘗試 "user@host" 與 "user@host:port"
+    var accounts = ["\(user)@\(host)"]
+    if let devPort { accounts.append("\(user)@\(host):\(devPort)") }
+    for account in accounts {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        p.arguments = ["find-generic-password", "-s", "DVRViewer.dev", "-a", account, "-w"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = Pipe()
+        try p.run()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { continue }
+        var s = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        if s.hasSuffix("\n") { s.removeLast() }
+        return s
     }
-    var s = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    if s.hasSuffix("\n") { s.removeLast() }
-    return s
+    throw NVMSError.transport("Keychain 找不到 \(accounts.joined(separator: " 或 "))，請先執行 tools/dvr-credentials.sh set \(host) \(user)")
 }
 
 func printDict(_ title: String, _ d: [String: String], filter: ((String) -> Bool)? = nil) {
@@ -93,7 +103,7 @@ let tsFormatter: DateFormatter = {
 func runStream(client: NVMSClient, channel: DVRChannel, kind: NVMSStream.Kind, seconds: Int,
                main: Bool, playbackStart: Date? = nil) async throws {
     guard let sid = await client.sessionId else { return }
-    let stream = NVMSStream(host: await client.host, port: await client.port, sessionId: sid)
+    let stream = NVMSStream(host: client.host, port: client.port, sessionId: sid)
     try await stream.connect()
     print("   WebSocket 已連線（create_connection code=0）")
     switch kind {
@@ -330,9 +340,10 @@ func runPlayerTest(host: String, port: Int, user: String, rest: [String], args: 
             p.onFrame = { _, t in c.frame(t) }
             p.onState = { s in print("   狀態：\(s)") }
             p.start()
-            try await Task.sleep(for: .seconds(4)); var m = c.snap(); report("子串流 4 秒", (0, nil))
+            let hold = args.int("seconds", 4)
+            try await Task.sleep(for: .seconds(hold)); var m = c.snap(); report("子串流 \(hold) 秒", (0, nil))
             p.setMainStream(true)
-            try await Task.sleep(for: .seconds(4)); report("切主串流 4 秒", m); m = c.snap()
+            try await Task.sleep(for: .seconds(hold)); report("切主串流 \(hold) 秒", m); m = c.snap()
             p.stop()
             try await Task.sleep(for: .seconds(1))
         } else {
@@ -356,6 +367,147 @@ func runPlayerTest(host: String, port: Int, user: String, rest: [String], args: 
             p.stop()
             try await Task.sleep(for: .seconds(1))
         }
+    } catch {
+        print("❌ \(error)")
+        await conn.disconnect()
+        return 3
+    }
+    await conn.disconnect()
+    print("■ 已登出")
+    return 0
+}
+
+/// 逐一頻道驗證回放是否播放「正確的頻道」：比對 SHFL offset 8（頻道編號，1 起）
+func runChannelCheck(host: String, port: Int, user: String, day: String) async -> Int32 {
+    let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+    var bad = 0
+    do {
+        let chls = try await conn.connect()
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: day) else { print("日期格式錯誤"); return 1 }
+        print("■ 傳輸：\(await conn.usesPrivateProtocol ? "TVT 私有協定" : "WebSocket")；日期 \(day)")
+        for ch in chls {
+            let ranges = (try? await conn.recordRanges(channelId: ch.id, day: d)) ?? []
+            guard let r = ranges.first else { print("   #\(ch.index + 1) \(ch.name)：當天無錄影"); continue }
+            let ms = try await conn.openPlayback(channelId: ch.id, start: r.start, end: r.end, mainStream: false, typeMask: ["manual", "schedule", "motion", "sensor"])
+            var got: UInt32?
+            let t = Task { try? await Task.sleep(for: .seconds(8)); await ms.close() }
+            for try await p in ms.frames { if p.count > 12, p.prefix(4) == Data("SHFL".utf8) { got = p.u32le(at: 8); break } }
+            t.cancel()
+            await ms.close()
+            let ok = got == UInt32(ch.index + 1)
+            if !ok { bad += 1 }
+            print("   #\(ch.index + 1) \(ch.name)：回傳頻道 \(got.map(String.init) ?? "無資料") \(ok ? "✅" : "❌")")
+        }
+    } catch {
+        print("❌ \(error)"); bad += 1
+    }
+    await conn.disconnect()
+    print("■ 結果：\(bad == 0 ? "全部正確" : "\(bad) 個頻道不符")")
+    return bad == 0 ? 0 : 5
+}
+
+// MARK: - 錄影下載（MP4）與驗證
+
+func verifyMP4(_ url: URL) async {
+    let asset = AVURLAsset(url: url)
+    do {
+        let dur = try await asset.load(.duration).seconds
+        guard let track = try await asset.loadTracks(withMediaType: .video).first else { print("   ❌ MP4 沒有影像軌"); return }
+        let size = try await track.load(.naturalSize)
+        let fmts = try await track.load(.formatDescriptions)
+        var fourcc = "?"
+        if let fd = fmts.first {
+            let v: UInt32 = CMFormatDescriptionGetMediaSubType(fd)
+            let bytes: [UInt8] = [UInt8((v >> 24) & 0xff), UInt8((v >> 16) & 0xff), UInt8((v >> 8) & 0xff), UInt8(v & 0xff)]
+            fourcc = String(bytes: bytes, encoding: .ascii) ?? "?"
+        }
+        let fps = try await track.load(.nominalFrameRate)
+        print(String(format: "   MP4 驗證：時長 %.1f 秒、%@ %.0fx%.0f、約 %.1f fps", dur, fourcc, size.width, size.height, fps))
+        // 讀回所有樣本數
+        let reader = try AVAssetReader(asset: asset)
+        let out = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        reader.add(out)
+        reader.startReading()
+        var n = 0
+        while out.copyNextSampleBuffer() != nil { n += 1 }
+        print("   MP4 讀回樣本數：\(n)（狀態 \(reader.status == .completed ? "完成" : "異常")）")
+        // 解出頭尾畫面（不輸出內容，只檢查亮度分佈）
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.requestedTimeToleranceBefore = .zero
+        gen.requestedTimeToleranceAfter = .positiveInfinity
+        for t in [0.0, max(dur - 0.5, 0)] {
+            let (img, _) = try await gen.image(at: CMTime(seconds: t, preferredTimescale: 600))
+            print("   畫面 @\(String(format: "%.1f", t))s：\(imageStats(img))")
+        }
+    } catch {
+        print("   ❌ MP4 驗證失敗：\(error.localizedDescription)")
+    }
+}
+
+func imageStats(_ img: CGImage) -> String {
+    let w = 160, h = 90
+    var px = [UInt8](repeating: 0, count: w * h)
+    guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                              space: CGColorSpaceCreateDeviceGray(), bitmapInfo: 0) else { return "無法分析" }
+    ctx.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+    var sum = 0.0, sq = 0.0
+    for v in px { let d = Double(v); sum += d; sq += d * d }
+    let m = sum / Double(px.count)
+    let sd = max(sq / Double(px.count) - m * m, 0).squareRoot()
+    return String(format: "%dx%d 亮度平均 %.1f 標準差 %.1f %@", img.width, img.height, m, sd, sd > 4 ? "✅" : "⚠️ 可能異常")
+}
+
+func runExport(host: String, port: Int, user: String, rest: [String], args: Args) async -> Int32 {
+    let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+    do {
+        let chls = try await conn.connect()
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        guard rest.count >= 3, let n = Int(rest[0]), n >= 1, n <= chls.count, let start = f.date(from: rest[1]),
+              let secs = Double(rest[2]) else {
+            print("用法：export <頻道> \"yyyy-MM-dd HH:mm:ss\" <秒數> [--main]"); return 1
+        }
+        let ch = chls[n - 1]
+        let end = start.addingTimeInterval(secs)
+        let tf = DateFormatter(); tf.dateFormat = "yyyyMMdd-HHmmss"
+        let url = captureDir().appending(path: "export-ch\(n)-\(tf.string(from: start))-\(Int(secs))s.mp4")
+        print("■ 下載 #\(n) \(ch.name)：\(rest[1]) 起 \(Int(secs)) 秒（\(await conn.usesPrivateProtocol ? "私有協定" : "WebSocket")，\(args.bool("main") ? "主串流" : "子串流")）")
+        let t0 = ContinuousClock.now
+        let lastPrint = Counter()
+        if let after = args.flags["cancel-after"].flatMap(Double.init) {
+            // 測試取消：指定秒數後取消，確認不留下檔案
+            let job = Task {
+                try await RecordingExporter.export(connection: conn, channelId: ch.id, start: start, end: end,
+                                                   mainStream: args.bool("main"), to: url) { _ in }
+            }
+            try await Task.sleep(for: .seconds(after))
+            job.cancel()
+            let outcome: String
+            do { _ = try await job.value; outcome = "❌ 未被取消（已完成）" }
+            catch is CancellationError { outcome = "✅ 已取消（CancellationError）" }
+            catch { outcome = "已中止：\(error)" }
+            print("   \(outcome)；檔案\(FileManager.default.fileExists(atPath: url.path) ? "❌ 仍存在" : "✅ 已刪除")")
+            await conn.disconnect()
+            return 0
+        }
+        let r = try await RecordingExporter.export(connection: conn, channelId: ch.id, start: start, end: end,
+                                                   mainStream: args.bool("main"), to: url) { p in
+            lastPrint.lock.withLock {
+                if p.frames - lastPrint.frames >= 200 || p.fraction >= 1 {
+                    lastPrint.frames = p.frames
+                    print(String(format: "   進度 %3.0f%%  %d 幀  %.1f MB", p.fraction * 100, p.frames, Double(p.bytes) / 1e6))
+                }
+            }
+        }
+        let el = Double((ContinuousClock.now - t0).components.seconds) + Double((ContinuousClock.now - t0).components.attoseconds) / 1e18
+        let media = r.lastFrameTime.timeIntervalSince(r.firstFrameTime)
+        let df = DateFormatter(); df.dateFormat = "HH:mm:ss.SSS"
+        print(String(format: "■ 完成：%d 幀（關鍵幀 %d）、%.1f MB、%@ %dx%d、錄影 %@ → %@（%.1f 秒）、壓縮空檔 %d 處",
+                     r.frames, r.keyframes, Double(r.bytes) / 1e6, r.codec.rawValue, r.width, r.height,
+                     df.string(from: r.firstFrameTime), df.string(from: r.lastFrameTime), media, r.gapsRemoved))
+        print(String(format: "   耗時 %.1f 秒（約即時 %.1f 倍）", el, media / max(el, 0.001)))
+        print("   檔案（僅本機）：\(url.path)")
+        await verifyMP4(url)
     } catch {
         print("❌ \(error)")
         await conn.disconnect()
@@ -390,7 +542,14 @@ func run() async -> Int32 {
         return 1
     }
     let host = args.positional[0], user = args.positional[2], cmd = args.positional[3]
+    devPort = port
     let rest = Array(args.positional.dropFirst(4))
+    if cmd == "export" {
+        return await runExport(host: host, port: port, user: user, rest: rest, args: args)
+    }
+    if cmd == "chcheck" {
+        return await runChannelCheck(host: host, port: port, user: user, day: rest.first ?? "")
+    }
     if cmd == "playertest" {
         return await runPlayerTest(host: host, port: port, user: user, rest: rest, args: args)
     }

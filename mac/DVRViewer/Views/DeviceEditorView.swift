@@ -12,6 +12,7 @@ struct DeviceEditorView: View {
     @State private var port = "80"
     @State private var username = ""
     @State private var password = ""
+    @State private var servicePort = "6036"
     @State private var testing = false
     @State private var result: String?
     @State private var resultOK = false
@@ -25,10 +26,11 @@ struct DeviceEditorView: View {
                     TextField("名稱", text: $name, prompt: Text("例如：公司 DVR"))
                     TextField("IP 或主機名稱", text: $host, prompt: Text("192.168.1.100 或 mydvr.ddns.net"))
                     TextField("Port（網頁連接埠）", text: $port)
+                    TextField("影像服務 Port", text: $servicePort)
                 } header: {
                     Text("DVR 位址")
                 } footer: {
-                    Text("使用 DVR 網頁介面的連接埠（與瀏覽器開啟 DVR 網頁時相同）。")
+                    Text("Port 填 DVR 網頁的連接埠。較舊韌體的 DVR 會改用 TVT 私有協定傳送影像，使用「影像服務 Port」（DVR 預設 6036；若路由器轉發成其他 Port，請填外部 Port）。")
                         .foregroundStyle(.secondary)
                 }
                 Section {
@@ -57,7 +59,7 @@ struct DeviceEditorView: View {
                     .keyboardShortcut(.cancelAction)
                 Button(isNew ? "測試並加入" : "測試並儲存") { Task { await save() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(testing || host.isEmpty || username.isEmpty || Int(port) == nil || (isNew && password.isEmpty))
+                    .disabled(testing || host.isEmpty || username.isEmpty || Int(port) == nil || Int(servicePort) == nil || (isNew && password.isEmpty))
             }
             .padding(20)
         }
@@ -68,6 +70,7 @@ struct DeviceEditorView: View {
     private func load() {
         if case .edit(let c) = target {
             name = c.name; host = c.host; port = String(c.port); username = c.username
+            servicePort = String(c.servicePort ?? 6036)
         }
     }
 
@@ -86,6 +89,7 @@ struct DeviceEditorView: View {
             config.host = host; config.port = p; config.username = username
         }
         config.host = config.host.trimmingCharacters(in: .whitespaces)
+        config.servicePort = Int(servicePort).flatMap { $0 == 6036 ? nil : $0 }
         if config.name.trimmingCharacters(in: .whitespaces).isEmpty || name.isEmpty { config.name = name.isEmpty ? host : name }
         else { config.name = name }
 

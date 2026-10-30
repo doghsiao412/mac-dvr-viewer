@@ -2,6 +2,8 @@ import SwiftUI
 
 struct LiveGridView: View {
     @Environment(AppStore.self) private var store
+    /// 即時畫面取得焦點時才處理 Delete，避免攔截輸入框的倒退鍵
+    @FocusState private var gridFocused: Bool
 
     var body: some View {
         GeometryReader { geo in
@@ -26,6 +28,17 @@ struct LiveGridView: View {
             }
         }
         .background(Color.black)
+        .focusable()
+        .focusEffectDisabled()
+        .focused($gridFocused)
+        .simultaneousGesture(TapGesture().onEnded { gridFocused = true })
+        .onKeyPress(keys: [.delete, .deleteForward]) { _ in
+            let slot = store.enlargedSlot ?? store.focusedSlot
+            guard store.slots.indices.contains(slot), store.slots[slot] != nil else { return .ignored }
+            store.clear(slot: slot)
+            return .handled
+        }
+        .onAppear { gridFocused = true }
     }
 }
 
@@ -85,5 +98,6 @@ struct LiveSlotView: View {
         Divider()
         Button("回放此頻道錄影") { store.playbackRef = ref; store.mode = .playback }
         Button("從畫面移除") { store.clear(slot: slot) }
+            .keyboardShortcut(.delete, modifiers: [])
     }
 }

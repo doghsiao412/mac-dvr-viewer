@@ -221,7 +221,9 @@ public enum NVMSError: Error, CustomStringConvertible {
         switch code {
         case 536870947, 536870948: return "帳號或密碼錯誤"
         case 536870951: return "帳號已被鎖定"
-        case 536870953: return "此帳號受限制"
+        case 536870953: return "此帳號沒有權限"
+        case 536870942, 513: return "沒有錄影資料"
+        case 536870960: return "設備忙碌中"
         case 536871011, 536870934: return "登入逾時／Session 失效"
         case 536870943: return "參數錯誤"
         case 536870913: return "節點已存在"

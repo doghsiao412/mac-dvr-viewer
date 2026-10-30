@@ -86,16 +86,17 @@ public final class VideoDecoder: @unchecked Sendable {
         }
         let sample = try makeSampleBuffer(avcc, format: format, pts: pts)
 
-        var result: DecodedFrame?
-        var cbStatus: OSStatus = noErr
+        // 同步解碼（flags 不含 asynchronous）：handler 在回傳前執行完畢
+        final class Box: @unchecked Sendable { var result: DecodedFrame?; var status: OSStatus = noErr }
+        let box = Box()
         let status = VTDecompressionSessionDecodeFrame(session, sampleBuffer: sample, flags: [],
                                                        infoFlagsOut: nil) { st, _, image, ptsOut, _ in
-            cbStatus = st
-            if st == noErr, let image { result = DecodedFrame(pixelBuffer: image, pts: ptsOut) }
+            box.status = st
+            if st == noErr, let image { box.result = DecodedFrame(pixelBuffer: image, pts: ptsOut) }
         }
         if status != noErr { throw DecodeError.decode(status) }
-        if cbStatus != noErr { throw DecodeError.decode(cbStatus) }
-        return result
+        if box.status != noErr { throw DecodeError.decode(box.status) }
+        return box.result
     }
 
     // MARK: - 內部
@@ -138,10 +139,13 @@ public final class VideoDecoder: @unchecked Sendable {
                                               outputCallback: nil, decompressionSessionOut: &s)
         guard st == noErr, let s else { throw DecodeError.session(st) }
         VTSessionSetProperty(s, key: kVTDecompressionPropertyKey_RealTime, value: kCFBooleanTrue)
-        var hw: CFTypeRef?
-        if VTSessionCopyProperty(s, key: kVTDecompressionPropertyKey_UsingHardwareAcceleratedVideoDecoder,
-                                 allocator: nil, valueOut: &hw) == noErr {
-            usingHardware = (hw as? Bool) ?? (hw as? NSNumber)?.boolValue
+        var hw: Unmanaged<CFTypeRef>?
+        let st2 = withUnsafeMutablePointer(to: &hw) {
+            VTSessionCopyProperty(s, key: kVTDecompressionPropertyKey_UsingHardwareAcceleratedVideoDecoder,
+                                  allocator: nil, valueOut: UnsafeMutableRawPointer($0))
+        }
+        if st2 == noErr, let v = hw?.takeRetainedValue() {
+            usingHardware = (v as? Bool) ?? (v as? NSNumber)?.boolValue
         }
         session = s
     }

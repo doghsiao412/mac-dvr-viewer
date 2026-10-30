@@ -12,7 +12,8 @@ struct SidebarView: View {
     var body: some View {
         List {
             ForEach(store.devices) { dev in
-                Section {
+                Section(isExpanded: Binding(get: { store.isExpanded(dev.id) },
+                                            set: { store.setExpanded(dev.id, $0) })) {
                     if dev.channels.isEmpty {
                         Text(dev.status == .online ? "沒有頻道" : dev.status.text)
                             .font(.caption).foregroundStyle(.secondary)
@@ -64,6 +65,9 @@ struct SidebarView: View {
             Button("編輯…") { editor = .edit(dev.config) }
             Button("重新連線") { dev.reconnect() }
             Divider()
+            Button("全部收合") { store.setAllExpanded(false) }
+            Button("全部展開") { store.setAllExpanded(true) }
+            Divider()
             Button("全部放入即時畫面") {
                 let chs = dev.orderedChannels
                 let n = chs.count <= 1 ? 1 : chs.count <= 4 ? 4 : chs.count <= 9 ? 9 : 16
@@ -79,6 +83,7 @@ struct SidebarView: View {
     private func helpText(_ dev: DeviceModel) -> String {
         var s = "\(dev.config.host):\(dev.config.port) — \(dev.status.text)"
         if let i = dev.info { s += "\n\(i.model)  韌體 \(i.firmware)" }
+        s += "\n" + dev.transportText
         return s
     }
 

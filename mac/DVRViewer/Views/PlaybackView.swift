@@ -8,9 +8,11 @@ struct PlaybackView: View {
     @State private var ranges: [DVRConnection.RecordRange] = []
     @State private var loadingRanges = false
     @State private var rangeError: String?
+    @State private var nearby: (before: Date?, after: Date?) = (nil, nil)
     @State private var zoom: Double = 6  // 預設顯示 4 小時
     @State private var mainStream = false
     @State private var aspect: VideoAspect = .fit
+    @State private var showExport = false
 
     private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16]
 
@@ -29,6 +31,13 @@ struct PlaybackView: View {
             await loadRanges()
         }
         .onDisappear { controller.stop() }
+        .sheet(isPresented: $showExport) {
+            if let ref = store.playbackRef {
+                ExportSheet(ref: ref,
+                            suggestedStart: controller.currentTime ?? ranges.first?.start ?? day,
+                            ranges: ranges)
+            }
+        }
     }
 
     // MARK: - 上方：頻道與日期
@@ -90,7 +99,7 @@ struct PlaybackView: View {
         } else if let e = rangeError {
             message("查詢錄影失敗", e, "exclamationmark.triangle")
         } else if ranges.isEmpty {
-            message("這一天沒有錄影", "請選擇其他日期", "calendar.badge.exclamationmark")
+            noRecordingView
         } else {
             switch controller.phase {
             case .loading: ProgressView().tint(.white)
@@ -100,6 +109,42 @@ struct PlaybackView: View {
             default: EmptyView()
             }
         }
+    }
+
+    /// 當天無錄影：提示並提供前後最接近、有錄影的日期
+    private var noRecordingView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "calendar.badge.exclamationmark").font(.title)
+            Text("DVR 在這一天沒有此攝影機的錄影").font(.headline)
+            Text(day, format: .dateTime.year().month().day().weekday())
+                .font(.caption).foregroundStyle(.white.opacity(0.8))
+            if nearby.before != nil || nearby.after != nil {
+                HStack(spacing: 10) {
+                    if let b = nearby.before {
+                        Button { day = b } label: {
+                            Label { Text(b, format: .dateTime.month().day()) } icon: { Image(systemName: "chevron.left") }
+                        }
+                        .help("前往前一個有錄影的日期")
+                    }
+                    if let a = nearby.after {
+                        Button { day = a } label: {
+                            Label { Text(a, format: .dateTime.month().day()) } icon: { Image(systemName: "chevron.right") }
+                        }
+                        .labelStyle(.titleAndIcon)
+                        .environment(\.layoutDirection, .rightToLeft)
+                        .help("前往下一個有錄影的日期")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                Text("最接近且有錄影的日期").font(.caption2).foregroundStyle(.white.opacity(0.7))
+            } else {
+                Text("這台攝影機目前在 DVR 上沒有任何錄影").font(.caption)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(16)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func message(_ title: String, _ detail: String, _ symbol: String) -> some View {
@@ -170,6 +215,9 @@ struct PlaybackView: View {
                         .disabled(zoom >= RecordTimeline.zoomRange.upperBound)
                 }
                 Button { snapshot() } label: { Image(systemName: "camera") }.help("截圖")
+                Button { showExport = true } label: { Image(systemName: "arrow.down.circle") }
+                    .help("下載錄影（⌘D）")
+                    .keyboardShortcut("d", modifiers: [.command])
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, 12)
@@ -217,6 +265,7 @@ struct PlaybackView: View {
         controller.stop()
         ranges = []
         rangeError = nil
+        nearby = (nil, nil)
         guard let ref = store.playbackRef, let dev = store.device(ref.deviceID) else { return }
         loadingRanges = true
         defer { loadingRanges = false }
@@ -224,6 +273,9 @@ struct PlaybackView: View {
             let r = try await dev.connection.recordRanges(channelId: ref.channelID, day: day)
             guard !Task.isCancelled else { return }
             ranges = r
+            if r.isEmpty {
+                nearby = (try? await dev.connection.nearestRecordingDays(channelId: ref.channelID, around: day)) ?? (nil, nil)
+            }
             // 自動從當日第一段錄影開始（今天則從 10 分鐘前開始）
             if let first = r.first {
                 var start = first.start

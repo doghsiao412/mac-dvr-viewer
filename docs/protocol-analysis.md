@@ -29,8 +29,8 @@ Swift App ── HTTP POST /<指令> (XML) ────────────�
   → `content/sessionId`（去掉 `{}`）、`userId`、`authGroupId`、`adminName`。
   ⚠️ 密碼只做 Base64，經明文 HTTP 傳送（DVR 網頁本身也是如此）→ 建議日後經 VPN 連線。
 * **Session**：之後每個請求帶 `Cookie: sessionId=<id>`；`doLogout` 登出。DVR `autoLogoutWaitTime=60`。
-* **錯誤碼**：536870947/536870948 帳密錯誤、536870951 帳號鎖定、536870953 受限、536871011/536870934 Session 逾時、
-  536870943 參數錯誤、536870961 無錄影／播放結束。
+* **錯誤碼**：536870947/536870948 帳密錯誤、536870951 帳號鎖定、536870953 **沒有權限**（舊版網頁 IDCS_NO_PERMISSION）、536871011/536870934 Session 逾時、
+  536870943 參數錯誤、536870961 無錄影／播放結束、**536870942／513 沒有錄影資料**（舊韌體 `queryChlRecLog` 當天無錄影時回傳此錯誤，而非空清單）、536870960 設備忙碌。
 * 已驗證指令：
 
 | 指令 | 用途 | 結果 |
@@ -104,6 +104,52 @@ Swift App ── HTTP POST /<指令> (XML) ────────────�
 * VideoToolbox 可直接硬體解碼（VPS/SPS/PPS 來自關鍵幀，其餘 NAL 轉 4-byte 長度前綴）✅
 * 先前「start code 在偏移 21/45」是分析腳本在標頭內誤判；所有訊框影像皆從 68+extLen 開始 ✅。offset 44 偶爾為 0x04（用途未知，不影響解碼）。
 
+## 0.25 第二台 DVR（網頁 Port 8082，舊韌體）— 2026-10-31
+
+* 同為 NVMS-9000，但網頁版本 `20191212.01`（8083 那台為 `20210528.01`）
+* `js/lib/websocket.cmd.js` 回 **404**、無 `liveWasm`／`recWasm` 路由 → **不支援 WebSocket 影像串流**；網頁只能靠瀏覽器外掛（OCX/NPAPI）看影像
+* HTTP XML API 可用：`doLogin` ✅、`queryNodeList` ✅、`queryChlRecLog` ✅（10/30 頻道 1 有 7 段 MOTION）
+* 外掛影像 Port 取自 `queryUPnPCfg` 的 `portType=SERVICE`（內部 6036）；外網轉發推測為 **6033**
+  （SuperLive Plus 同時連 `DVR:6036` 與 `DVR:6033`；兩者皆送 `head`，softwareVer 欄位不同：6033=`00080301`、6036=`00060301`，對應關係待登入確認）
+* App 處理：以 `HEAD /js/lib/websocket.cmd.js`（404/200）判斷，不支援時顯示說明、不重試連線
+* ✅ 已實作 6036 私有協定（見 §0.4），即時與回放皆可用
+* 外網對應更正：**8082 DVR → 外網 6036**（softwareVer 00060301 = 1.3.6），**8083 DVR → 外網 6033**
+
+## 0.4 TVT NVMS-9000 私有協定（SERVICE Port 6036）— ✅ 實體驗證（2026-10-31）
+
+用於**不支援 WebSocket 的舊韌體**（8082 那台：TD-2716TE-HC，韌體 1.3.6 / 2020-05）。
+來源：SuperLive Plus 封包（`tools/capture.sh` + `tools/re/tvt_frames.py`），實作：`DVRKit/TVTPrivateClient.swift`。
+App 依 DVR 是否提供 `js/lib/websocket.cmd.js` 自動選擇 WebSocket 或本協定。
+
+**框架**（little-endian）
+```
+"1111" | u32 len | body(len)                    一般訊息
+"1111" | 00000000                               心跳（雙方約每 5 秒）
+"1111" | FFFFFFFF | u32 id | u32 分段數 | u32 總長 | u32 第幾段(1起) | u32 本段長度(≤65504) | u32 0 | 資料
+                                                分段訊息（> 約 64 KB，例如大關鍵幀），依 id 組合
+"head" + 60 bytes                               連線後設備主動送出（devType=3、protocolVer=6、loginEncrypt=0）
+body = u32 cmd | u32 sub | u32 id | u32 dataLen | [路由區塊 72] | data(dataLen)
+```
+* cmd：`0x01000003` 直接請求、`0x01020003` 路由請求（帶路由區塊）；回覆把 `…03` 換成 `…06`、`sub |= 0x10000000`，id 相同
+* `0x00000006 / 0x00010001`：即時 SHFL（SHFL offset 8 = 頻道序號，1 起）；`0x00000006 / 0x0A01–0A03`：狀態通知
+* `0x00020006 / 0x00020001`：回放 SHFL（含路由區塊，任務 GUID 在 data[52:68]，SHFL 從 data[72] 起）；`/0x00020002`：回放結束
+* **路由區塊**：`GUID 請求(隨機) | GUID session | GUID 目標 | u32 2 | GUID 任務 | u32 op`
+  目標：即時＝頻道 GUID（`{00000001-…}`），回放＝設備 GUID；GUID 為 Windows 排列（前三段 little-endian）
+
+| sub | 種類 | 內容 | 驗證 |
+|---|---|---|---|
+| `0x101` | 直接 | **登入**：data 236 bytes：u32 3 @0、帳號 @36（64）、**密碼明文** @100（64）、u32 0xCD @200。回覆 sub `0x10000101` 成功：設備 GUID @0、session GUID @84 | ✅ |
+| `0x91B` | 直接 | **XML 查詢**：帳號(64) + url(64) + NVMS-9000 XML（同 HTTP API）；回覆為 HTTP 文字（含 `Data:` 標頭）＋ XML | ✅ |
+| `0x505` | 路由 op 1 | **開啟即時**：XML `<destId>頻道</destId><taskId>{任務}</taskId><chNo>0起</chNo><audio>0</audio><streamType>1主/2子</streamType>`（clientType='SYS'） | ✅ |
+| `0x502` | 路由 op 2 | 關閉即時：u32 1 + 72 bytes 0 | ✅ |
+| `0x803` | 路由 op 1 | **開啟回放**：88 bytes：u32 開始、u32 結束（Unix 秒）、u16 0xFFFF、u16 頻道數量(1)、**u32 頻道編號（1 起）@12**、u32 7 @80、u16 1 @86。⚠️ 起初誤判為位元遮罩（Camera3 播出 Camera4），已以 16 頻道逐一驗證修正 | ✅ |
+| `0x807` | 路由 op 2 | 關閉回放（同上，@86=0） | ✅ |
+| `0x808` | 路由 op 5 | **流量控制**：u32 已顯示的訊框序號（SHFL offset 36）；SuperLive 約每 6 幀，本專案每 8 幀 | ✅ |
+| `0x80B` | 路由 op 5 | 跳轉：u64 FILETIME + u32 結束 — 本專案改用「關閉後重開」 | 未使用 |
+| `0x801` | 直接 | 錄影搜尋（二進位）— 本專案改用 HTTP `queryChlRecLog` | 未使用 |
+
+⚠️ 安全性：登入密碼以**明文**經 TCP 傳送（設備宣告 loginEncrypt=0），比 HTTP 的 Base64 更不安全 → 強烈建議經 VPN。
+
 ## 0.3 6036 私有協定（觀察，未採用）
 
 連線後設備主動送 64 bytes `head`（devType=3、productType=0x2000、protocolVer=6、encryptType=0、loginEncrypt=0）
@@ -112,7 +158,7 @@ Web API 已涵蓋所需功能，故不實作；保留為備案。
 
 **SuperLive Plus 實際連線（`slp-watch.sh`，2026-10-30，不需 sudo）**：開啟 App 後立即建立並持續保持：
 * `DVR:6036`（TCP，NVMS-9000 私有協定）與 `DVR:6033`（TCP，用途待確認，推測為另一條資料／串流通道）— 區網外直連，**未經雲端中轉**
-* 另一個外部 IP 的 `:6036`（推測為 SuperLive Plus 清單中的第二台設備）
+* 另一個外部 IP 的 `:6036`（推測為 SuperLive Plus 清單中的另一台設備）
 * TVT 雲端：`47.88.x.x:7010/7023`、`47.241.x.x:443`（短暫連線，推測為帳號／推播／NAT 服務）
 * 每秒開關一次、未連線的 UDP socket（推測為區網設備搜尋）
 * SuperLive Plus **不使用** 8083 網頁 API；本專案改用 8083 是因為協定公開且功能完整。

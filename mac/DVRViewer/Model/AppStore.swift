@@ -31,6 +31,26 @@ final class AppStore {
     // 提示訊息
     var toast: String?
 
+    // 錄影下載
+    let exports = ExportManager()
+
+    // 側邊欄：已收合的設備（記憶於 UserDefaults）
+    var collapsedDevices: Set<UUID> = Set(
+        (UserDefaults.standard.stringArray(forKey: "collapsedDevices") ?? []).compactMap(UUID.init)
+    ) {
+        didSet { UserDefaults.standard.set(collapsedDevices.map(\.uuidString), forKey: "collapsedDevices") }
+    }
+
+    func isExpanded(_ id: UUID) -> Bool { !collapsedDevices.contains(id) }
+
+    func setExpanded(_ id: UUID, _ expanded: Bool) {
+        if expanded { collapsedDevices.remove(id) } else { collapsedDevices.insert(id) }
+    }
+
+    func setAllExpanded(_ expanded: Bool) {
+        collapsedDevices = expanded ? [] : Set(devices.map(\.id))
+    }
+
     init() {
         devices = DevicePersistence.load().map(DeviceModel.init)
         loadUI()

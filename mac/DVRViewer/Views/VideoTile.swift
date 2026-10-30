@@ -19,6 +19,7 @@ struct VideoTile: View {
         let ref: CameraRef
         let main: Bool
         let conn: ObjectIdentifier
+        let ready: Bool
     }
 
     var body: some View {
@@ -35,7 +36,8 @@ struct VideoTile: View {
         .overlay(alignment: .bottomLeading) { nameBar }
         .overlay(alignment: .topTrailing) { if hovering { tileButtons } }
         .onHover { hovering = $0 }
-        .task(id: StreamKey(ref: ref, main: mainStream, conn: ObjectIdentifier(device.connection))) {
+        .task(id: StreamKey(ref: ref, main: mainStream, conn: ObjectIdentifier(device.connection), ready: device.webStreaming != nil)) {
+            guard device.webStreaming != nil else { return }  // 等待偵測完成（WebSocket 或私有協定）
             await controller.run(connection: device.connection, channelID: ref.channelID, mainStream: mainStream)
         }
     }

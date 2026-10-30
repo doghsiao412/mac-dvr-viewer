@@ -38,6 +38,9 @@ cleanup() {
   echo; echo "已儲存：$out"
   echo "分析：python3 -I tools/pcap_analyze.py $out --dvr $host"
 }
-trap cleanup EXIT
+# Ctrl-C 只結束 tcpdump；腳本攔截 INT 後繼續執行 cleanup（修正擁有者與權限）
+trap ':' INT
 # -s 0 完整封包；-U 即時寫入；-n 不反查 DNS
-tcpdump -i "$iface" -s 0 -U -n -w "$out" "$filter"
+tcpdump -i "$iface" -s 0 -U -n -w "$out" "$filter" || true
+trap - INT
+cleanup

@@ -28,6 +28,8 @@ final class DeviceModel: Identifiable {
     private(set) var channels: [DVRChannel] = []
     private(set) var online: Set<String> = []
     private(set) var info: DVRConnection.DeviceInfo?
+    /// nil = 未知；false = 韌體不支援 WebSocket 影像串流
+    private(set) var webStreaming: Bool?
     private var loop: Task<Void, Never>?
 
     nonisolated var id: UUID { _id }
@@ -41,7 +43,7 @@ final class DeviceModel: Identifiable {
 
     static func makeConnection(_ c: DeviceConfig) -> DVRConnection {
         let id = c.id
-        return DVRConnection(host: c.host, port: c.port, username: c.username) {
+        return DVRConnection(host: c.host, port: c.port, username: c.username, servicePort: c.servicePort ?? 6036) {
             try KeychainStore.password(for: id)
         }
     }
@@ -49,7 +51,7 @@ final class DeviceModel: Identifiable {
     /// 設定變更（主機／帳號）後重建連線
     func apply(_ newConfig: DeviceConfig) {
         let needsReconnect = newConfig.host != config.host || newConfig.port != config.port
-            || newConfig.username != config.username
+            || newConfig.username != config.username || newConfig.servicePort != config.servicePort
         config = newConfig
         if needsReconnect { reconnect() }
     }
@@ -84,6 +86,7 @@ final class DeviceModel: Identifiable {
                 let conn = connection
                 channels = try await conn.connect()
                 info = await conn.info
+                webStreaming = await conn.supportsWebStreaming
                 online = (try? await conn.onlineChannelIds()) ?? Set(channels.map(\.id))
                 status = .online
                 retry = 5
@@ -124,4 +127,13 @@ final class DeviceModel: Identifiable {
     }
 
     func isOnline(_ channelID: String) -> Bool { online.contains(channelID) }
+
+    /// 影像傳輸方式（顯示用）
+    var transportText: String {
+        switch webStreaming {
+        case true: return "影像：WebSocket（Port \(config.port)）"
+        case false: return "影像：TVT 私有協定（Port \(config.servicePort ?? 6036)）"
+        default: return "影像：偵測中"
+        }
+    }
 }

@@ -24,7 +24,7 @@
 
 * Swift 6、SwiftUI（+AppKit）、Network.framework、VideoToolbox、AVFoundation、Swift Concurrency、Keychain。
 * 不用 Electron；不載入 Linux `.so`；Linux VM 跑原廠 SDK 只是最後手段（見 `docs/compatibility.md`）。
-* **通訊協定已確定**：NVMS-9000 Web API — HTTP XML（`POST /<指令>`）＋ WebSocket（`/requestWebsocketConnection`），DVR 網頁 Port（本機 DVR 為 8083）。細節見 `docs/protocol-analysis.md` §0。RTSP/ONVIF 外網不可用，6036 私有協定不採用。
+* **通訊協定**：NVMS-9000 Web API — HTTP XML（`POST /<指令>`）＋ WebSocket（`/requestWebsocketConnection`），使用 DVR 網頁 Port。較舊韌體（2020 前，無 `js/lib/websocket.cmd.js`）的影像改走 **TVT 私有協定（SERVICE Port 6036）**，由 `DVRConnection` 自動選擇。細節見 `docs/protocol-analysis.md` §0、§0.4。RTSP/ONVIF 外網不可用。
 * 協定原始依據是 DVR 網頁前端 JS（`http://DVR:port/js/lib/websocket.cmd.js` 等），有疑問時重新讀取，不要猜。
 * 模組分離見 `docs/architecture.md`；協定與媒體核心放在 Swift Package `mac/Packages/DVRKit`。
 
@@ -38,6 +38,8 @@
 ```bash
 cd mac/Packages/DVRKit && swift build && swift test
 mac/Packages/DVRKit/.build/debug/dvrcli <host> <port> <user> survey   # 在 repo 根目錄執行，輸出到 captures/
+mac/Packages/DVRKit/.build/debug/dvrcli <host> <port> <user> export <頻道> "yyyy-MM-dd HH:mm:ss" <秒數>   # 下載 MP4 並驗證
+mac/Packages/DVRKit/.build/debug/dvrcli <host> <port> <user> chcheck <yyyy-MM-dd>   # 逐頻道驗證回放頻道
 python3 -I tools/tests/test_pcap_analyze.py
 python3 -I tools/pcap_analyze.py captures/<f>.pcap --dvr <IP> --user <帳號>
 python3 -I tools/dvr_probe.py <IP> --user <帳號>

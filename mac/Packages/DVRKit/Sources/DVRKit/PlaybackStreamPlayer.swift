@@ -27,7 +27,7 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
 
     // 以下由 lock 保護
     private var generation = 0
-    private var stream: NVMSStream?
+    private var stream: MediaStream?
     private var queue: [SHFLFrame] = []
     private var deviceEnded = false
     private var paused = false
@@ -61,7 +61,7 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
             generation += 1
             tasks.forEach { $0.cancel() }
             tasks = []
-            if let s = stream { Task { await s.close(kind: .playback) } }
+            if let s = stream { Task { await s.close() } }
             stream = nil
             queue = []
             deviceEnded = false
@@ -86,13 +86,13 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
     }
 
     public func resume() {
-        let (s, idx) = lock.withLock { () -> (NVMSStream?, UInt32?) in
+        let (s, idx) = lock.withLock { () -> (MediaStream?, UInt32?) in
             paused = false
             return (stream, queue.last?.sequence)
         }
         onState?(.playing)
         // 立即回報一次，讓 DVR 繼續送資料（同網頁 _resumeDownload）
-        if let s, let idx { Task { try? await s.refreshPlayIndex(Int(idx)) } }
+        if let s, let idx { Task { await s.acknowledge(Int(idx)) } }
     }
 
     public func stepFrame() {
@@ -100,25 +100,25 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
     }
 
     public func setSpeed(_ newSpeed: Double) {
-        let (s, needKey, wasKey, t) = lock.withLock { () -> (NVMSStream?, Bool, Bool, Date?) in
+        let (s, needKey, wasKey, t) = lock.withLock { () -> (MediaStream?, Bool, Bool, Date?) in
             let was = keyFrameMode
             speed = max(0.25, min(newSpeed, 32))
             keyFrameMode = speed > 4
             return (stream, keyFrameMode, was, currentTime)
         }
-        if needKey != wasKey, let s, let t {
-            Task { try? await s.keyFrameOnly(needKey, at: t) }
+        if needKey != wasKey, let s, let t, let kf = s.setKeyFrameOnly {
+            Task { await kf(needKey, t) }
         }
     }
 
     public func stop() {
-        let (ts, s) = lock.withLock { () -> ([Task<Void, Never>], NVMSStream?) in
+        let (ts, s) = lock.withLock { () -> ([Task<Void, Never>], MediaStream?) in
             generation += 1
             defer { tasks = []; stream = nil; queue = [] }
             return (tasks, stream)
         }
         ts.forEach { $0.cancel() }
-        if let s { Task { await s.close(kind: .playback) } }
+        if let s { Task { await s.close() } }
         onState?(.stopped)
     }
 
@@ -128,32 +128,20 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
 
     private func receiveLoop(gen: Int, start: Date, end: Date) async {
         do {
-            let sid = try await connection.sessionId()
-            let s = NVMSStream(host: connection.host, port: connection.port, sessionId: sid)
-            guard isCurrent(gen) else { return }
-            lock.withLock { stream = s }
-            try await s.connect()
-            try await s.openPlayback(channelId: channelId, start: Int(start.timeIntervalSince1970),
-                                     end: Int(end.timeIntervalSince1970), streamIndex: mainStream ? 0 : 1,
-                                     typeMask: ["manual", "schedule", "motion", "sensor", "smart_motion", "osc", "avd",
-                                                "tripwire", "perimeter", "vfd", "pos", "cpc", "cdd", "ipd"])
-            if lock.withLock({ keyFrameMode }) { try? await s.keyFrameOnly(true, at: start) }
-            while !Task.isCancelled, isCurrent(gen) {
-                switch try await s.receive() {
-                case .frame(let f):
-                    if let fr = SHFLFrame.parse(f.payload) {
-                        lock.withLock { if generation == gen { queue.append(fr) } }
-                    }
-                case .message(let url, let code, _):
-                    if let code, code != 0, url.hasPrefix("/device/playback") {
-                        if code == 536_870_961 { markEnded(gen); return }  // 無錄影／結束
-                        throw NVMSError.device(command: url, code: code)
-                    }
-                case .closed:
-                    markEnded(gen)  // 只影響本輪（跳轉後舊串流關閉不可誤判新串流結束）
-                    return
+            let ms = try await connection.openPlayback(
+                channelId: channelId, start: start, end: end, mainStream: mainStream,
+                typeMask: ["manual", "schedule", "motion", "sensor", "smart_motion", "osc", "avd",
+                           "tripwire", "perimeter", "vfd", "pos", "cpc", "cdd", "ipd"])
+            guard isCurrent(gen) else { await ms.close(); return }
+            lock.withLock { stream = ms }
+            if lock.withLock({ keyFrameMode }), let kf = ms.setKeyFrameOnly { await kf(true, start) }
+            for try await payload in ms.frames {
+                if Task.isCancelled || !isCurrent(gen) { return }
+                if let fr = SHFLFrame.parse(payload) {
+                    lock.withLock { if generation == gen { queue.append(fr) } }
                 }
             }
+            markEnded(gen)  // 串流正常結束（播完）
         } catch {
             guard isCurrent(gen), !Task.isCancelled else { return }
             if DVRConnection.isSessionError(error) { try? await connection.relogin() }
@@ -222,7 +210,7 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
             let seq = Int(frame.sequence)
             let (s, keyMode) = lock.withLock { (stream, keyFrameMode) }
             if seq > 0, seq % 8 == 0 || keyMode, let s {
-                try? await s.refreshPlayIndex(seq)
+                await s.acknowledge(seq)
             }
             if step { lock.withLock { stepRequested = false } }
         }
