@@ -8,7 +8,7 @@ struct PlaybackView: View {
     @State private var ranges: [DVRConnection.RecordRange] = []
     @State private var loadingRanges = false
     @State private var rangeError: String?
-    @State private var zoom: Double = 1
+    @State private var zoom: Double = 6  // 預設顯示 4 小時
     @State private var mainStream = false
     @State private var aspect: VideoAspect = .fit
 
@@ -151,12 +151,24 @@ struct PlaybackView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 140)
                 .onChange(of: mainStream) { _, _ in if let t = controller.currentTime { startOrSeek(t, reopen: true) } }
-                HStack(spacing: 4) {
-                    Image(systemName: "minus.magnifyingglass").foregroundStyle(.secondary)
-                    Slider(value: $zoom, in: 1...48).frame(width: 100)
-                    Image(systemName: "plus.magnifyingglass").foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Button { zoomBy(1 / 2) } label: { Image(systemName: "minus.magnifyingglass") }
+                        .help("縮小時間軸（⌘－）")
+                        .keyboardShortcut("-", modifiers: [.command])
+                        .disabled(zoom <= RecordTimeline.zoomRange.lowerBound)
+                    Menu(RecordTimeline.spanText(zoom: zoom)) {
+                        ForEach([(1.0, "24 小時"), (2, "12 小時"), (6, "4 小時"), (24, "1 小時"), (96, "15 分鐘"), (288, "5 分鐘"), (1440, "1 分鐘")], id: \.0) { z, label in
+                            Button(label) { zoom = z }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("時間軸顯示範圍")
+                    Button { zoomBy(2) } label: { Image(systemName: "plus.magnifyingglass") }
+                        .help("放大時間軸（⌘＋）")
+                        .keyboardShortcut("=", modifiers: [.command])
+                        .disabled(zoom >= RecordTimeline.zoomRange.upperBound)
                 }
-                .help("時間軸縮放")
                 Button { snapshot() } label: { Image(systemName: "camera") }.help("截圖")
             }
             .buttonStyle(.borderless)
@@ -190,6 +202,12 @@ struct PlaybackView: View {
     }
 
     // MARK: - 動作
+
+    private func zoomBy(_ f: Double) {
+        withAnimation(.snappy(duration: 0.2)) {
+            zoom = min(max(zoom * f, RecordTimeline.zoomRange.lowerBound), RecordTimeline.zoomRange.upperBound)
+        }
+    }
 
     private func shiftDay(_ d: Int) {
         if let n = Calendar.current.date(byAdding: .day, value: d, to: day) { day = n }
