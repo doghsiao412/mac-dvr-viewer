@@ -6,7 +6,6 @@ Apple Silicon 原生 macOS App，直接連線既有的 TVT（及 OEM）DVR／NVR
 Mac SwiftUI App ─▶ macOS 原生網路層（Network.framework）─▶ DVR／NVR
 ```
 
-不依賴 NAS、Docker、Node.js、Electron 或常駐伺服器。
 
 ## 下載
 
