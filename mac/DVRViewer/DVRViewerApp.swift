@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct DVRViewerApp: App {
     @State private var store = AppStore()
+    @StateObject private var updater = UpdaterModel()
 
     var body: some Scene {
         WindowGroup("DVR Viewer", id: "main") {
@@ -10,7 +11,10 @@ struct DVRViewerApp: App {
                 .environment(store)
                 .frame(minWidth: 900, minHeight: 600)
         }
-        .commands { DVRCommands(store: store) }
+        .commands {
+            DVRCommands(store: store)
+            CommandGroup(after: .appInfo) { CheckForUpdatesButton(updater: updater) }
+        }
 
         // 獨立攝影機視窗（可放到第二螢幕、可置頂）
         WindowGroup("攝影機", id: "camera", for: CameraRef.self) { $ref in
@@ -23,7 +27,7 @@ struct DVRViewerApp: App {
         .defaultSize(width: 640, height: 400)
 
         Settings {
-            SettingsView()
+            SettingsView(updater: updater)
                 .environment(store)
         }
     }

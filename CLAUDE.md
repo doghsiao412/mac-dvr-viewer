@@ -40,6 +40,7 @@ cd mac/Packages/DVRKit && swift build && swift test
 mac/Packages/DVRKit/.build/debug/dvrcli <host> <port> <user> survey   # 在 repo 根目錄執行，輸出到 captures/
 mac/Packages/DVRKit/.build/debug/dvrcli <host> <port> <user> export <頻道> "yyyy-MM-dd HH:mm:ss" <秒數>   # 下載 MP4 並驗證
 mac/Packages/DVRKit/.build/debug/dvrcli <host> <port> <user> chcheck <yyyy-MM-dd>   # 逐頻道驗證回放頻道
+SPARKLE_BIN=<Sparkle 發行包>/bin tools/release.sh <版本> <內部版本號>   # 發佈：編譯→DMG→Sparkle 簽章→appcast 項目
 python3 -I tools/tests/test_pcap_analyze.py
 python3 -I tools/pcap_analyze.py captures/<f>.pcap --dvr <IP> --user <帳號>
 python3 -I tools/dvr_probe.py <IP> --user <帳號>

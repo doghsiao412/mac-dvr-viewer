@@ -9,7 +9,9 @@ Mac SwiftUI App ─▶ macOS 原生網路層（Network.framework）─▶ DVR／
 
 ## 下載
 
-[GitHub Releases](https://github.com/doghsiao412/mac-dvr-viewer/releases) 下載 `DVR-Viewer-0.1.zip`，解壓後把 **DVR Viewer.app** 拖到「應用程式」。
+[GitHub Releases](https://github.com/doghsiao412/mac-dvr-viewer/releases) 下載最新的 `DVR-Viewer-x.y.dmg`，打開後把 **DVR Viewer.app** 拖到「應用程式」。
+
+* 0.2 起內建自動更新（Sparkle）：選單「DVR Viewer → 檢查更新…」，設定頁可關閉自動檢查。0.1 沒有自動更新，請手動下載一次 0.2
 
 * 需求：Apple Silicon Mac、macOS 15 以上
 * 此版本未經 Apple 公證（ad-hoc 簽章）。第一次開啟若出現「無法驗證開發者」：在 App 上按右鍵 →「打開」，或到「系統設定 → 隱私權與安全性」按「強制打開」
@@ -18,7 +20,7 @@ Mac SwiftUI App ─▶ macOS 原生網路層（Network.framework）─▶ DVR／
 
 ## 目前狀態
 
-**v0.1**（見 [docs/progress.md](docs/progress.md)）
+**v0.2**（見 [docs/progress.md](docs/progress.md)）
 
 已在實體 DVR（TVT TD-2716NE-HC，NVMS-9000）驗證：登入、設備資訊、頻道、即時 H.265 串流、錄影查詢、錄影回放串流、VideoToolbox 硬體解碼（截圖）。
 macOS App（DVR Viewer）已在實體 DVR 確認可用（即時畫面與錄影回放）：設備管理、1/4/9/16 分割即時畫面、24 小時時間軸回放。錄影下載：回放畫面按 ⌘D，存成 MP4（不轉碼）。證據見 [docs/test-results.md](docs/test-results.md)（Mock 與實體分開標示）。

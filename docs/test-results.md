@@ -107,3 +107,11 @@
 | 2026-10-31 | 迴歸：8082 回放全流程、第三台即時主子串流切換 | ✅ |
 | 2026-10-31 | App 中 8083 即時／回放聲音 | ✅ 使用者確認 |
 | 2026-10-31 | App 中舊韌體 DVR（私有協定）聲音 | ✅ 使用者確認 |
+
+## 0.2 打包與自動更新
+
+| 日期 | 測試 | 結果 |
+|---|---|---|
+| 2026-10-31 | Release 編譯 0.2（build 2），Sparkle.framework 嵌入、`codesign --verify --deep --strict` | ✅ |
+| 2026-10-31 | DMG：`hdiutil verify`、掛載後 App 版本與簽章 | ✅ |
+| 2026-10-31 | Sparkle `sign_update --verify` 驗證 DMG 的 EdDSA 簽章；`appcast.xml` 以 xmllint 檢查 | ✅ |

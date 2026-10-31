@@ -8,6 +8,13 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<!-- Sparkle 自動更新：更新清單（appcast）與 EdDSA 公鑰（私鑰存在開發者鑰匙圈，帳號 local.dvrviewer.app） -->
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/doghsiao412/mac-dvr-viewer/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>D+7J9EE0lB9lUT48/hNNpy4fjTpGxII3C/YpLRF2vF4=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>DVR Viewer 需要連線到區域網路內的 DVR／NVR 以觀看即時影像與錄影。</string>
 </dict>

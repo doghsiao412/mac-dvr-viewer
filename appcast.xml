@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>DVR Viewer</title>
+    <link>https://github.com/doghsiao412/mac-dvr-viewer</link>
+    <description>DVR Viewer 更新</description>
+    <language>zh-TW</language>
+    <item>
+      <title>DVR Viewer 0.2</title>
+      <pubDate>Sat, 31 Oct 2026 00:37:04 +0000</pubDate>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>0.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>DVR Viewer 0.2</h2>
+        <ul>
+          <li>加入聲音：即時畫面（同時一格出聲）與錄影回放（1× 播放時）</li>
+          <li>舊韌體 DVR（TVT 私有協定）也支援聲音</li>
+          <li>加入自動更新（Sparkle）：選單「檢查更新…」、設定頁可關閉自動檢查</li>
+          <li>改以 DMG 發佈</li>
+        </ul>
+      ]]></description>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.2/DVR-Viewer-0.2.dmg"
+                 sparkle:edSignature="49oE1YQSDfimYYVpC7LC8y6oJao8m+bgaG0bUfWFD+hoEdq9eBDujyyRDQG7g+I8HT5q8bkJgpISZrfDnqTYCA=="
+                 length="2194606"
+                 type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>

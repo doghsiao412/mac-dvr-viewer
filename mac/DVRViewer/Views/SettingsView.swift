@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppStore.self) private var store
+    @ObservedObject var updater: UpdaterModel
 
     var body: some View {
         @Bindable var store = store
@@ -18,6 +19,20 @@ struct SettingsView: View {
                     }
                     Text("即時畫面同時只有一個畫面出聲：滑鼠移到畫面上按喇叭圖示。回放只在 1× 播放時輸出聲音。")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("更新") {
+                    Toggle("自動檢查更新", isOn: $updater.automaticallyChecks)
+                    HStack {
+                        Text("目前版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-")")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("立即檢查更新") { updater.checkForUpdates() }
+                            .disabled(!updater.canCheckForUpdates)
+                    }
+                    if let d = updater.lastCheck {
+                        Text("上次檢查：\(d.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Section("截圖") {
                     LabeledContent("儲存位置") {
@@ -44,6 +59,6 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem { Label("關於", systemImage: "info.circle") }
         }
-        .frame(width: 520, height: 340)
+        .frame(width: 520, height: 440)
     }
 }
