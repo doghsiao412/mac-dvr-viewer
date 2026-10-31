@@ -908,6 +908,22 @@ func run() async -> Int32 {
         await conn.disconnect()
         return 0
     }
+    if cmd == "privid" {
+        // privid [--service-port P]：私有協定登入，列出設備 GUID 與回應中的可讀文字（辨識是哪一台設備）
+        let sp = args.int("service-port", 6036)
+        let c = TVTPrivateClient(host: host, port: sp)
+        do {
+            try await c.connect(user: user, password: try devPassword(user: user, host: host))
+            let r = await c.loginReply
+            print("■ \(host):\(sp) 設備 GUID：\(TVTGUID.string(await c.deviceGUID))，回應 \(r.count) bytes")
+            var run = "", runs: [String] = []
+            for b in r { if b >= 0x20 && b < 0x7F { run.append(Character(UnicodeScalar(b))) } else { if run.count >= 4 { runs.append(run) }; run = "" } }
+            if run.count >= 4 { runs.append(run) }
+            print("   可讀文字：\(runs)")
+            await c.disconnect()
+        } catch { print("✖ \(error.localizedDescription)"); return 1 }
+        return 0
+    }
     if cmd == "audioscan" { return await runAudioScan(host: host, port: port, user: user, args: args) }
     if cmd == "audiotest" {
         return await runAudioTest(host: host, port: port, user: user, rest: rest, args: args)

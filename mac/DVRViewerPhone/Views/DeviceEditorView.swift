@@ -42,7 +42,7 @@ struct DeviceEditorView: View {
                 } header: {
                     Text("DVR 位址")
                 } footer: {
-                    Text("Port 填 DVR 網頁的連接埠即可。「影像服務 Port」非必要不需修改，保持 6036。")
+                    Text("Port 填 DVR 網頁的連接埠。「影像服務 Port」用於同時看超過 6 路即時影像；同一個外網 IP 後面有多台 DVR 時，每台的影像服務 Port 不同（例如 6036、6033），請依路由器的轉發設定填寫。填錯時畫面會顯示「影像服務 Port 設定錯誤」。")
                 }
                 Section {
                     TextField("帳號", text: $username)

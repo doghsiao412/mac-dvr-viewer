@@ -53,6 +53,8 @@ public actor TVTPrivateClient {
     public private(set) var sessionGUID = Data(count: 16)
     public private(set) var deviceGUID = Data(count: 16)
     public private(set) var isConnected = false
+    /// 登入回應原始資料（含設備 GUID 等；用來辨識連到的是哪一台設備）
+    public private(set) var loginReply = Data()
 
     public init(host: String, port: Int) {
         self.host = host
@@ -83,6 +85,7 @@ public actor TVTPrivateClient {
             disconnect()
             throw ClientError.loginFailed(code)
         }
+        loginReply = reply.data
         deviceGUID = reply.data.subdata(in: reply.data.startIndex..<(reply.data.startIndex + 16))
         sessionGUID = reply.data.subdata(in: (reply.data.startIndex + 84)..<(reply.data.startIndex + 100))
         isConnected = true

@@ -258,3 +258,7 @@ public enum NVMSError: Error, CustomStringConvertible {
         }
     }
 }
+
+extension NVMSError: LocalizedError {
+    public var errorDescription: String? { description }
+}

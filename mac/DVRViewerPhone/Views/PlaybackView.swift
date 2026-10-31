@@ -25,6 +25,14 @@ struct PlaybackView: View {
 
     private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16]
     private var landscape: Bool { vSize == .compact }
+    /// 畫面大小（判斷寬螢幕，例如 iPhone Duo 展開）
+    @State private var size: CGSize = .zero
+    /// 寬螢幕但不是一般手機橫放：影像放最大，控制項併成兩列
+    private var wide: Bool { !landscape && size.width > size.height * 1.15 }
+    /// 直放時影像與控制項之外還剩約 110 pt 以上（約 2 筆事件）（例如 iPhone Duo 外螢幕），事件清單直接列在下方
+    private var inlineEvents: Bool {
+        !landscape && !wide && size.height - (size.width - 32) * 9 / 16 - 230 > 110
+    }
     private var isToday: Bool { Calendar.current.isDateInToday(day) }
 
     enum SheetKind: String, Identifiable {
@@ -58,26 +66,66 @@ struct PlaybackView: View {
                 .toolbarVisibility(showControls ? .visible : .hidden, for: .navigationBar)
                 .statusBarHidden(!showControls)
                 .persistentSystemOverlays(.hidden)
+            } else if wide {
+                VStack(spacing: 8) {
+                    video
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .background(.black)
+                        .clipShape(.rect(cornerRadius: 12))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    timeline
+                    HStack(spacing: 8) {
+                        dayBar.frame(maxWidth: 300)
+                        Spacer()
+                        skipBack
+                        playButton
+                        skipForward
+                        Spacer()
+                        HStack(spacing: 4) {
+                            timeText.font(.headline.monospacedDigit())
+                            speedMenu
+                            audioButton
+                        }
+                        .frame(maxWidth: 300, alignment: .trailing)
+                    }
+                    .disabled(ranges.isEmpty)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 4)
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     video
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .background(.black)
                         .clipShape(.rect(cornerRadius: 12))
                         .padding(.horizontal)
-                    timeText
+                        .layoutPriority(1)   // 下方清單不可擠壓影像
                     timeline.padding(.horizontal)
                     transport.padding(.horizontal)
-                    dayBar.padding(.horizontal)
-                    Spacer()
+                    HStack(spacing: 0) {
+                        dayControls
+                        Spacer()
+                        timeText.font(.headline.monospacedDigit())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .padding(.horizontal)
+                    if inlineEvents {
+                        eventList
+                    } else {
+                        Spacer()
+                    }
                 }
             }
         }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .navigationTitle(device.displayName(channelID))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button { sheet = .events } label: { Label("事件", systemImage: "list.bullet.rectangle") }
+                if !inlineEvents {
+                    Button { sheet = .events } label: { Label("事件", systemImage: "list.bullet.rectangle") }
+                }
                 Button { sheet = .export } label: { Label("下載", systemImage: "square.and.arrow.down") }
                     .disabled(ranges.isEmpty)
             }
@@ -167,6 +215,35 @@ struct PlaybackView: View {
             .padding()
     }
 
+    /// 直接列在畫面下方的事件清單（點一下跳到該時間）
+    private var eventList: some View {
+        List {
+            Section {
+                if events.isEmpty {
+                    Text(loadingEvents ? "查詢事件…" : "這天沒有事件（全天連續錄影時 DVR 不會另外切出事件）")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(events) { e in
+                        Button {
+                            startOrSeek(e.source == .log ? e.start.addingTimeInterval(-3) : e.start, snap: false)
+                        } label: {
+                            EventRow(event: e, current: controller.currentTime)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("事件（\(events.count)）")
+                    if loadingEvents { ProgressView().controlSize(.mini) }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .contentMargins(.top, 0, for: .scrollContent)
+    }
+
     private var timeText: some View {
         Group {
             if let t = controller.currentTime {
@@ -187,44 +264,62 @@ struct PlaybackView: View {
 
     private var transport: some View {
         HStack {
-            Menu {
-                Picker("速度", selection: Binding(get: { controller.speed }, set: { controller.setSpeed($0) })) {
-                    ForEach(speeds, id: \.self) { Text(Self.speedText($0)).tag($0) }
-                }
-                Picker("畫質", selection: $mainStream) {
-                    Text("流暢").tag(false)
-                    Text("高畫質").tag(true)
-                }
-            } label: {
-                Text(Self.speedText(controller.speed))
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
-                    .frame(minWidth: 44, minHeight: 44)
-            }
-
+            speedMenu
             Spacer()
-            Button { controller.skip(-10) } label: { Image(systemName: "gobackward.10").font(.title2) }
-                .accessibilityLabel("倒退 10 秒")
+            skipBack
             Spacer()
-            Button { togglePlay() } label: {
-                Image(systemName: playing ? "pause.fill" : "play.fill")
-                    .font(.title)
-                    .frame(width: 56, height: 56)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .accessibilityLabel(playing ? "暫停" : "播放")
+            playButton
             Spacer()
-            Button { controller.skip(10) } label: { Image(systemName: "goforward.10").font(.title2) }
-                .accessibilityLabel("前進 10 秒")
+            skipForward
             Spacer()
-
-            Button { controller.setAudio(!controller.audioOn) } label: {
-                Image(systemName: controller.audioOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                    .frame(minWidth: 44, minHeight: 44)
-            }
-            .accessibilityLabel(controller.audioOn ? "關閉聲音" : "開啟聲音")
+            audioButton
         }
         .disabled(ranges.isEmpty)
+    }
+
+    private var speedMenu: some View {
+        Menu {
+            Picker("速度", selection: Binding(get: { controller.speed }, set: { controller.setSpeed($0) })) {
+                ForEach(speeds, id: \.self) { Text(Self.speedText($0)).tag($0) }
+            }
+            Picker("畫質", selection: $mainStream) {
+                Text("流暢").tag(false)
+                Text("高畫質").tag(true)
+            }
+        } label: {
+            Text(Self.speedText(controller.speed))
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+                .frame(minWidth: 44, minHeight: 44)
+        }
+    }
+
+    private var skipBack: some View {
+        Button { controller.skip(-10) } label: { Image(systemName: "gobackward.10").font(.title2).frame(minWidth: 44, minHeight: 44) }
+            .accessibilityLabel("倒退 10 秒")
+    }
+
+    private var skipForward: some View {
+        Button { controller.skip(10) } label: { Image(systemName: "goforward.10").font(.title2).frame(minWidth: 44, minHeight: 44) }
+            .accessibilityLabel("前進 10 秒")
+    }
+
+    private var playButton: some View {
+        Button { togglePlay() } label: {
+            Image(systemName: playing ? "pause.fill" : "play.fill")
+                .font(.title)
+                .frame(width: 56, height: 56)
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel(playing ? "暫停" : "播放")
+    }
+
+    private var audioButton: some View {
+        Button { controller.setAudio(!controller.audioOn) } label: {
+            Image(systemName: controller.audioOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .accessibilityLabel(controller.audioOn ? "關閉聲音" : "開啟聲音")
     }
 
     private var dayBar: some View {
@@ -237,6 +332,20 @@ struct PlaybackView: View {
                 .labelsHidden()
             Spacer()
             Button { shiftDay(1) } label: { Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44) }
+                .disabled(isToday)
+                .accessibilityLabel("後一天")
+        }
+    }
+
+    /// 精簡的日期切換（直放時與時間放同一列）
+    private var dayControls: some View {
+        HStack(spacing: 0) {
+            Button { shiftDay(-1) } label: { Image(systemName: "chevron.left").frame(minWidth: 36, minHeight: 44) }
+                .accessibilityLabel("前一天")
+            DatePicker("日期", selection: Binding(get: { day }, set: { day = Calendar.current.startOfDay(for: $0) }),
+                       in: ...Date(), displayedComponents: .date)
+                .labelsHidden()
+            Button { shiftDay(1) } label: { Image(systemName: "chevron.right").frame(minWidth: 36, minHeight: 44) }
                 .disabled(isToday)
                 .accessibilityLabel("後一天")
         }

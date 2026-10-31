@@ -23,7 +23,7 @@ struct EventsSheet: View {
                     onPick(e)
                     dismiss()
                 } label: {
-                    row(e)
+                    EventRow(event: e, current: current)
                 }
                 .foregroundStyle(.primary)
             }
@@ -56,32 +56,38 @@ struct EventsSheet: View {
         .presentationDetents([.medium, .large])
     }
 
-    private func row(_ e: DVRConnection.RecordEvent) -> some View {
+    static func duration(_ s: TimeInterval) -> String {
+        let n = Int(s.rounded())
+        return n >= 60 ? "\(n / 60) 分 \(n % 60) 秒" : "\(n) 秒"
+    }
+}
+
+/// 一筆事件：顏色條、時間、類型、長度；目前播放中的事件加粗並標示
+struct EventRow: View {
+    let event: DVRConnection.RecordEvent
+    let current: Date?
+
+    private var isCurrent: Bool {
+        guard let current, let end = event.end else { return false }
+        return event.start <= current && current < end
+    }
+
+    var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2).fill(TimelineStyle.color(e.type)).frame(width: 4, height: 32)
+            RoundedRectangle(cornerRadius: 2).fill(TimelineStyle.color(event.type)).frame(width: 4, height: 32)
             VStack(alignment: .leading, spacing: 2) {
-                Text(e.start, format: .dateTime.hour().minute().second())
-                    .font(.body.monospacedDigit().weight(isCurrent(e) ? .bold : .regular))
-                Text(TimelineStyle.typeName(e.type)).font(.caption).foregroundStyle(.secondary)
+                Text(event.start, format: .dateTime.hour().minute().second())
+                    .font(.body.monospacedDigit().weight(isCurrent ? .bold : .regular))
+                Text(TimelineStyle.typeName(event.type)).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            if let end = e.end {
-                Text(Self.duration(end.timeIntervalSince(e.start))).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            if let end = event.end {
+                Text(EventsSheet.duration(end.timeIntervalSince(event.start))).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
-            if isCurrent(e) {
+            if isCurrent {
                 Image(systemName: "play.fill").font(.caption).foregroundStyle(TimelineStyle.playhead)
             }
         }
         .contentShape(.rect)
-    }
-
-    private func isCurrent(_ e: DVRConnection.RecordEvent) -> Bool {
-        guard let current, let end = e.end else { return false }
-        return e.start <= current && current < end
-    }
-
-    static func duration(_ s: TimeInterval) -> String {
-        let n = Int(s.rounded())
-        return n >= 60 ? "\(n / 60) 分 \(n % 60) 秒" : "\(n) 秒"
     }
 }

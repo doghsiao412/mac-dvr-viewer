@@ -103,6 +103,7 @@ public actor DVRConnection {
         _ = try await sessionId()
         let caps = try await withSession { try await $0.systemCaps() }
         let basic = (try? await withSession { try await $0.basicConfig() }) ?? [:]
+        serialNumber = basic["sn"].flatMap { $0.isEmpty ? nil : $0 }
         info = DeviceInfo(
             name: basic["name"] ?? host,
             model: basic["TVTProductModel"] ?? basic["productModel"] ?? "",
@@ -281,9 +282,16 @@ public actor DVRConnection {
         if let c = privateClient, await c.isConnected { return c }
         if let t = privateConnectTask { return try await t.value }
         let host = host, port = servicePort, user = username, provider = passwordProvider
+        let sn = serialNumber
         let t = Task<TVTPrivateClient, Error> {
             let c = TVTPrivateClient(host: host, port: port)
             try await c.connect(user: user, password: try provider())
+            // 確認影像服務 Port 連到的是同一台設備：私有協定登入回應含設備序號，須與網頁 API 的 sn 相同。
+            // 同一個外網 IP 後面有多台 DVR 時，Port 設錯會連到另一台（帳號相同就能登入），畫面會變成別台的攝影機。
+            if let sn, (await c.loginReply).range(of: Data(sn.utf8)) == nil {
+                await c.disconnect()
+                throw NVMSError.transport(Self.servicePortMismatchMessage(port))
+            }
             return c
         }
         privateConnectTask = t
@@ -325,12 +333,22 @@ public actor DVRConnection {
             if let ch = channel(channelId), let ms = try? await openPrivateLiveIfAvailable(ch, mainStream: mainStream) {
                 return ms
             }
+            if let f = privateFailure { throw NVMSError.transport("\(Self.liveLimitMessage)；\(f)") }
             throw NVMSError.transport("\(Self.liveLimitMessage)，且無法連到影像服務 Port \(servicePort)（請在設備設定確認此 Port）")
         }
     }
 
     /// 超過 WebSocket 上限且私有協定連不上時的錯誤訊息開頭（App 用來顯示設定提示）
     public static let liveLimitMessage = "DVR 同時影像連線已達上限"
+
+    static func servicePortMismatchMessage(_ port: Int) -> String {
+        "影像服務 Port \(port) 連到的是另一台設備（序號不符），請在設定中修正此 DVR 的影像服務 Port"
+    }
+
+    /// 網頁 API 的設備序號（用來確認私有協定連到同一台設備）
+    private var serialNumber: String?
+    /// 最近一次私有協定連線失敗的原因（顯示給使用者）
+    private var privateFailure: String?
 
     /// 目前開著的 WebSocket 即時串流數與偵測到的上限
     private var activeWebLive = 0
@@ -341,9 +359,10 @@ public actor DVRConnection {
     private func webLiveClosed() { activeWebLive = max(activeWebLive - 1, 0) }
 
     private func openPrivateLiveIfAvailable(_ ch: DVRChannel, mainStream: Bool) async throws -> MediaStream {
-        if let t = privateRetryAfter, t > Date() { throw NVMSError.transport("私有協定暫時無法連線") }
+        if let t = privateRetryAfter, t > Date() { throw NVMSError.transport(privateFailure ?? "私有協定暫時無法連線") }
         do { return try await openPrivateLive(ch, mainStream: mainStream) } catch {
             privateRetryAfter = Date().addingTimeInterval(60)
+            if case NVMSError.transport(let m) = error, m.hasPrefix("影像服務 Port") { privateFailure = m } else { privateFailure = nil }
             throw error
         }
     }

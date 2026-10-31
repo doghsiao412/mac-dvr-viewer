@@ -5,21 +5,38 @@ import SwiftUI
 struct DeviceListView: View {
     @Environment(PhoneStore.self) private var store
     @State private var editor: EditorTarget?
+    @State private var editMode: EditMode = .inactive
 
     var body: some View {
         NavigationStack {
             List {
                 ForEach(store.devices) { device in
-                    NavigationLink(value: device.id) {
-                        DeviceRow(device: device)
-                    }
-                    .swipeActions {
-                        Button("刪除", role: .destructive) { store.delete(device) }
-                        Button("編輯") { editor = .edit(device.config) }.tint(.blue)
+                    if editMode.isEditing {
+                        // 編輯模式：點一下打開設定（連結在編輯模式下不能點）
+                        Button { editor = .edit(device.config) } label: {
+                            HStack {
+                                DeviceRow(device: device)
+                                Spacer()
+                                Image(systemName: "pencil").foregroundStyle(.secondary)
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        NavigationLink(value: device.id) {
+                            DeviceRow(device: device)
+                        }
+                        .swipeActions {
+                            Button("刪除", role: .destructive) { store.delete(device) }
+                            Button("編輯") { editor = .edit(device.config) }.tint(.blue)
+                        }
                     }
                 }
                 .onMove { store.move(from: $0, to: $1) }
+                .onDelete { idx in idx.map { store.devices[$0] }.forEach(store.delete) }
             }
+            .environment(\.editMode, $editMode)
+            .onChange(of: store.devices.isEmpty) { _, empty in if empty { editMode = .inactive } }
             .overlay {
                 if store.devices.isEmpty {
                     ContentUnavailableView {
@@ -54,7 +71,11 @@ struct DeviceListView: View {
                     Button("加入 DVR", systemImage: "plus") { editor = .new }
                 }
                 if !store.devices.isEmpty {
-                    ToolbarItem(placement: .topBarLeading) { EditButton() }
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(editMode.isEditing ? "完成" : "編輯") {
+                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        }
+                    }
                 }
             }
             .sheet(item: $editor) { target in
