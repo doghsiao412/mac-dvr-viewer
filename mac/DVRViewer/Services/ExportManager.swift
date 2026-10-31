@@ -67,14 +67,14 @@ final class ExportManager {
 
     @discardableResult
     func start(connection: DVRConnection, channelID: String, title: String, start: Date, end: Date,
-               mainStream: Bool, to url: URL, onFinish: @escaping @MainActor (Job) -> Void) -> Job {
+               mainStream: Bool, includeAudio: Bool = true, to url: URL, onFinish: @escaping @MainActor (Job) -> Void) -> Job {
         let job = Job(title: title, url: url, start: start, end: end)
         jobs.insert(job, at: 0)
         job.task = Task { @MainActor in
             do {
                 let r = try await RecordingExporter.export(
                     connection: connection, channelId: channelID, start: start, end: end,
-                    mainStream: mainStream, to: url) { p in
+                    mainStream: mainStream, includeAudio: includeAudio, to: url) { p in
                     Task { @MainActor in
                         guard job.isRunning else { return }
                         job.fraction = p.fraction
@@ -86,6 +86,7 @@ final class ExportManager {
                 job.bytes = r.bytes
                 let secs = Int(r.lastFrameTime.timeIntervalSince(r.firstFrameTime))
                 var text = String(format: "%.1f MB，%d×%d，錄影約 %d 分 %d 秒", Double(r.bytes) / 1e6, r.width, r.height, secs / 60, secs % 60)
+                text += r.audioFrames > 0 ? "，含聲音" : (includeAudio ? "，此段無聲音" : "")
                 if r.gapsRemoved > 0 { text += "（已略過 \(r.gapsRemoved) 段無錄影空檔）" }
                 job.state = .done(text)
                 onFinish(job)

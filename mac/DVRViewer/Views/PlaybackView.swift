@@ -19,13 +19,20 @@ struct PlaybackView: View {
     private struct QueryKey: Hashable { let ref: CameraRef?; let day: Date; let conn: ObjectIdentifier? }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            video
-            Divider()
-            controls
-        }
+        // Liquid Glass：影像滿版，上方與下方為浮動玻璃面板
+        video
+            .overlay(alignment: .top) {
+                header
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .glassEffect(.regular, in: .capsule)
+                    .padding(.top, 12).padding(.horizontal, 16)
+            }
+            .overlay(alignment: .bottom) {
+                controls
+                    .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                    .padding(.horizontal, 16).padding(.bottom, 16)
+            }
+            .background(Color.black)
         .task(id: QueryKey(ref: store.playbackRef, day: day,
                            conn: store.playbackRef.flatMap { store.device($0.deviceID) }.map { ObjectIdentifier($0.connection) })) {
             await loadRanges()
@@ -55,6 +62,7 @@ struct PlaybackView: View {
             }
             Spacer()
             Button { shiftDay(-1) } label: { Image(systemName: "chevron.left") }
+                .buttonStyle(.borderless)
                 .help("前一天")
             DatePicker("日期", selection: Binding(get: { day }, set: { day = Calendar.current.startOfDay(for: $0) }),
                        displayedComponents: .date)
@@ -62,12 +70,12 @@ struct PlaybackView: View {
                 .datePickerStyle(.field)
                 .frame(width: 120)
             Button { shiftDay(1) } label: { Image(systemName: "chevron.right") }
+                .buttonStyle(.borderless)
                 .help("後一天")
                 .disabled(day >= Calendar.current.startOfDay(for: Date()))
             Button("今天") { day = Calendar.current.startOfDay(for: Date()) }
+                .buttonStyle(.glass)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
 
     // MARK: - 影像
@@ -76,16 +84,6 @@ struct PlaybackView: View {
         VideoSurface(renderer: controller.renderer, aspect: aspect)
             .background(Color.black)
             .overlay { videoStatus }
-            .overlay(alignment: .bottomLeading) {
-                if let t = controller.currentTime {
-                    Text(t, format: .dateTime.year().month().day().hour().minute().second())
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 4))
-                        .padding(8)
-                }
-            }
             .contextMenu {
                 Picker("畫面比例", selection: $aspect) { ForEach(VideoAspect.allCases) { Text($0.title).tag($0) } }
                 Button("截圖") { snapshot() }
@@ -96,14 +94,16 @@ struct PlaybackView: View {
         if store.playbackRef == nil {
             EmptyView()
         } else if loadingRanges {
-            ProgressView("查詢錄影中…").tint(.white).foregroundStyle(.white)
+            ProgressView("查詢錄影中…")
+                .padding(16)
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
         } else if let e = rangeError {
             message("查詢錄影失敗", e, "exclamationmark.triangle")
         } else if ranges.isEmpty {
             noRecordingView
         } else {
             switch controller.phase {
-            case .loading: ProgressView().tint(.white)
+            case .loading: ProgressView().padding(14).glassEffect(.regular, in: .circle)
             case .ended: message("播放結束", "點選時間軸繼續播放其他時段", "stop.circle")
             case .failed(let e): message("播放錯誤", e, "exclamationmark.triangle")
             case .idle: message("點選時間軸開始播放", "", "hand.tap")
@@ -118,7 +118,7 @@ struct PlaybackView: View {
             Image(systemName: "calendar.badge.exclamationmark").font(.title)
             Text("DVR 在這一天沒有此攝影機的錄影").font(.headline)
             Text(day, format: .dateTime.year().month().day().weekday())
-                .font(.caption).foregroundStyle(.white.opacity(0.8))
+                .font(.caption).foregroundStyle(.secondary)
             if nearby.before != nil || nearby.after != nil {
                 HStack(spacing: 10) {
                     if let b = nearby.before {
@@ -136,48 +136,58 @@ struct PlaybackView: View {
                         .help("前往下一個有錄影的日期")
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .controlSize(.small)
-                Text("最接近且有錄影的日期").font(.caption2).foregroundStyle(.white.opacity(0.7))
+                Text("最接近且有錄影的日期").font(.caption2).foregroundStyle(.secondary)
             } else {
                 Text("這台攝影機目前在 DVR 上沒有任何錄影").font(.caption)
             }
         }
-        .foregroundStyle(.white)
-        .padding(16)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+        .padding(20)
+        .glassEffect(.regular, in: .rect(cornerRadius: 20))
     }
 
     private func message(_ title: String, _ detail: String, _ symbol: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: symbol).font(.title)
             Text(title).font(.headline)
-            if !detail.isEmpty { Text(detail).font(.caption).multilineTextAlignment(.center) }
+            if !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center) }
         }
-        .foregroundStyle(.white)
-        .padding(14)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+        .padding(18)
+        .glassEffect(.regular, in: .rect(cornerRadius: 20))
     }
 
     // MARK: - 下方：時間軸與控制
 
     private var controls: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             RecordTimeline(day: day, ranges: ranges, current: controller.currentTime, zoom: $zoom) { t in
                 startOrSeek(t)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 6)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
 
             HStack(spacing: 14) {
-                legend
+                VStack(alignment: .leading, spacing: 2) {
+                    if let t = controller.currentTime {
+                        Text(t, format: .dateTime.hour().minute().second())
+                            .font(.title3.monospacedDigit().weight(.semibold))
+                        Text(t, format: .dateTime.year().month().day())
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    legend
+                }
+                .frame(minWidth: 120, alignment: .leading)
                 Spacer()
                 Button { controller.skip(-10) } label: { Image(systemName: "gobackward.10") }
                     .help("倒退 10 秒").keyboardShortcut(.leftArrow, modifiers: [])
                 Button { togglePlay() } label: {
                     Image(systemName: controller.isPaused || controller.phase == .idle || controller.phase == .ended ? "play.fill" : "pause.fill")
-                        .frame(width: 22)
+                        .font(.title3)
+                        .frame(width: 30, height: 30)
                 }
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.circle)
                 .help("播放／暫停（空白鍵）")
                 .keyboardShortcut(.space, modifiers: [])
                 Button { controller.skip(10) } label: { Image(systemName: "goforward.10") }
@@ -231,8 +241,8 @@ struct PlaybackView: View {
                     .keyboardShortcut("d", modifiers: [.command])
             }
             .buttonStyle(.borderless)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
             .disabled(store.playbackRef == nil || ranges.isEmpty)
         }
     }

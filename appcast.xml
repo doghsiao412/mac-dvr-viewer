@@ -1,29 +1,43 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
-    <title>DVR Viewer</title>
-    <link>https://github.com/doghsiao412/mac-dvr-viewer</link>
-    <description>DVR Viewer 更新</description>
-    <language>zh-TW</language>
+    <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.2</title>
-      <pubDate>Sat, 31 Oct 2026 00:37:04 +0000</pubDate>
-      <sparkle:version>2</sparkle:version>
-      <sparkle:shortVersionString>0.2</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[
-        <h2>DVR Viewer 0.2</h2>
-        <ul>
-          <li>加入聲音：即時畫面（同時一格出聲）與錄影回放（1× 播放時）</li>
-          <li>舊韌體 DVR（TVT 私有協定）也支援聲音</li>
-          <li>加入自動更新（Sparkle）：選單「檢查更新…」、設定頁可關閉自動檢查</li>
-          <li>改以 DMG 發佈</li>
-        </ul>
-      ]]></description>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.2/DVR-Viewer-0.2.dmg"
-                 sparkle:edSignature="49oE1YQSDfimYYVpC7LC8y6oJao8m+bgaG0bUfWFD+hoEdq9eBDujyyRDQG7g+I8HT5q8bkJgpISZrfDnqTYCA=="
-                 length="2194606"
-                 type="application/octet-stream" />
+      <title>DVR Viewer 0.3</title>
+      <pubDate>Sat, 31 Oct 2026 01:13:46 GMT</pubDate>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>0.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description sparkle:format="markdown"><![CDATA[v0.3
+
+- 錄影下載包含聲音：聲音轉為 AAC 與影像一起存成 MP4，下載視窗可選擇是否包含聲音。
+- 下載時錄影中斷的空檔自動略過，聲音與影像保持對齊。
+- 介面改為 Liquid Glass 風格：回放影像滿版，頻道／日期與時間軸控制改為浮動玻璃面板；即時畫面的名稱列、按鈕與狀態提示改為玻璃材質。
+- 回放控制面板加入目前播放時間的大字顯示。
+- 最低系統需求改為 macOS 26。
+
+v0.2
+
+- 加入聲音：即時畫面按喇叭圖示收聽（同時只有一個畫面出聲），錄影回放在 1× 播放時輸出聲音，可調整音量。
+- 舊韌體 DVR（TVT 私有協定）也支援聲音。
+- 加入自動更新：選單「檢查更新…」，設定頁可關閉自動檢查，更新檔會驗證簽章。
+- 改以 DMG 發佈。
+
+v0.1
+
+- 首次發佈：直接連線 TVT（及 OEM）NVMS-9000 系列 DVR／NVR，不需 SuperLive Plus 或任何伺服器。
+- 自動選擇傳輸方式：新韌體走網頁 WebSocket，舊韌體走 TVT 私有協定（Port 6036）。
+- 即時影像：1／4／9／16 分割、拖放頻道、雙擊放大、主／子串流、數位縮放、截圖、獨立攝影機視窗（可置頂）。
+- 錄影回放：拖曳式時間軸（可縮放到 1 分鐘）、暫停、0.5–16 倍速、逐格、±10 秒，當天無錄影時提示最近有錄影的日期。
+- 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
+- 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
+]]></description>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.3/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.3/DVR-Viewer-0.3.dmg" sparkle:edSignature="oJS5jJ5TW9YhVBy2XsuVSzbAipM6Ru+uZHvWLDN9tl4snXzysk2rqUyfH9gG6yZPDQO8bgEtRtfyEYOScd9RBQ==" length="2214215" type="application/octet-stream"></enclosure>
     </item>
   </channel>
-</rss>
+</rss><!-- sparkle-signatures:
+edSignature: 9dseVsNLQIRqDVc8gcbFARgIYvdoto0m3nVKrKsTc97wdJS2zhxQrIHT5aYQyN5f22K9afmf9DbyWitqmxNhCg==
+length: 2839
+-->

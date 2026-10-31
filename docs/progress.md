@@ -1,6 +1,6 @@
 # 進度
 
-## 目前狀態（2026-10-31，v0.2）
+## 目前狀態（2026-10-31，v0.3）
 
 **原生直連可行，已在實體 DVR 驗證**：Swift 程式（不經 SuperLive Plus、不用 Docker）已能登入外網 DVR、
 讀設備資訊與頻道、取即時 H.265 影像、查詢錄影、取得歷史錄影串流，並以 VideoToolbox 硬體解碼成畫面。**macOS App（DVR Viewer）已在實體 DVR 上由使用者確認即時畫面與錄影回放正常 → 專案最終驗收標準已達成**（不開 SuperLive Plus、不用 Docker）。錄影下載（MP4，不轉碼）已在兩台實體 DVR 驗證。
@@ -49,7 +49,9 @@
 - [x] 聲音：G.711 A-law 解碼 + AVAudioEngine；即時畫面同時一格出聲（喇叭按鈕）、回放 1× 出聲與音量；WebSocket DVR 已驗證
 - [x] 私有協定（舊韌體）聲音：即時 0x501／0x502、回放 0x803 @84=3（第三台 DVR 實測）
 - [x] Sparkle 2.10.0 自動更新（appcast：repo 根目錄 `appcast.xml`；EdDSA 私鑰在開發者鑰匙圈 `local.dvrviewer.app`；`tools/release.sh` 發佈流程）、改以 DMG 發佈
-- [ ] 錄影下載含聲音（目前只下載影像）
+- [x] 錄影下載含聲音：G.711 → PCM → AAC（8 kHz 單聲道），聲音晚到時先暫存影像（最多 8 秒）再決定是否建聲音軌；交錯寫入、補靜音避免 AVAssetWriter 互等卡死
+- [x] 最低版本改為 macOS 26（App 與 DVRKit；Package tools 6.2）
+- [x] 介面 Liquid Glass：回放影像滿版＋浮動玻璃面板（上方頻道／日期、下方時間軸與控制）、畫面格玻璃名稱列與玻璃圓形按鈕（GlassEffectContainer）、玻璃狀態提示與 toast、主要按鈕 glassProminent
 - [ ] 多頻道同步回放、事件書籤
 - [x] App 圖示（程式繪製：攝影機＋錄影燈＋時間軸）、Release 打包 **v0.1**（arm64、ad-hoc 簽章、未公證）→ GitHub Release
 ## Phase 4：整合與優化 — 未開始
@@ -68,6 +70,8 @@
 | 2026-10-31 | App 暫不啟用 Sandbox、ad-hoc 簽章、Swift 5 語言模式 | 先確保功能可用；DVRKit 套件維持 Swift 6 嚴格併發。Release 前再評估 Sandbox（需 network.client）與正式簽章 |
 | 2026-10-31 | 新增 TVT 私有協定，並以 MediaStream 統一 WebSocket／私有協定 | 舊韌體（2020）無 WebSocket 串流；播放器與解碼不需區分來源 |
 | 2026-10-31 | 自動更新採 Sparkle 2.10.0（SPM，exactVersion），appcast 放 GitHub raw、DMG 放 Release | 主流開源方案；選發佈超過兩週的版本（2.10.1 僅 6 天）；App 未公證，靠 EdDSA 簽章確保更新檔完整 |
+| 2026-10-31 | 最低版本 macOS 26 | 使用 Liquid Glass API（glassEffect、GlassEffectContainer、.glass 按鈕） |
+| 2026-10-31 | 下載的聲音轉 AAC（不保留 G.711） | MP4 不支援 G.711；AVAssetWriter 內建 AAC 編碼，相容性最好 |
 | 2026-10-31 | 顯示使用 VideoToolbox 解碼 → AVSampleBufferDisplayLayer（DisplayImmediately） | 同一份解碼結果可直接截圖；回放節奏由 PlaybackStreamPlayer 依 FILETIME 控制 |
 
 ## 安全注意

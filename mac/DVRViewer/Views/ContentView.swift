@@ -18,7 +18,7 @@ struct ContentView: View {
                         Text("加入 DVR 的位址、Port 與帳號後，即可觀看即時影像與錄影。")
                     } actions: {
                         Button("加入 DVR…") { editor = .new }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.glassProminent)
                     }
                 } else {
                     switch store.mode {
@@ -31,8 +31,8 @@ struct ContentView: View {
                 if let t = store.toast {
                     Text(t)
                         .font(.callout)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(.regularMaterial, in: Capsule())
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .glassEffect(.regular, in: .capsule)
                         .padding(.bottom, 16)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }

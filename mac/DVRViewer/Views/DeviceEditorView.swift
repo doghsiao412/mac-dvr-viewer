@@ -58,6 +58,7 @@ struct DeviceEditorView: View {
                 Button("取消", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(isNew ? "測試並加入" : "測試並儲存") { Task { await save() } }
+                    .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
                     .disabled(testing || host.isEmpty || username.isEmpty || Int(port) == nil || Int(servicePort) == nil || (isNew && password.isEmpty))
             }

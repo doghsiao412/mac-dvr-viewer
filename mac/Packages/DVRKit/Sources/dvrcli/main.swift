@@ -432,6 +432,29 @@ func verifyMP4(_ url: URL) async {
         var n = 0
         while out.copyNextSampleBuffer() != nil { n += 1 }
         print("   MP4 讀回樣本數：\(n)（狀態 \(reader.status == .completed ? "完成" : "異常")）")
+        if let at = try await asset.loadTracks(withMediaType: .audio).first {
+            let afd = try await at.load(.formatDescriptions).first
+            let sub: UInt32 = afd.map { CMFormatDescriptionGetMediaSubType($0) } ?? 0
+            let asbd = afd.flatMap { CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee }
+            let tr = try await at.load(.timeRange)
+            let ar = try AVAssetReader(asset: asset)
+            let ao = AVAssetReaderTrackOutput(track: at, outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM])
+            ar.add(ao); ar.startReading()
+            var pcmBytes = 0, nonSilent = 0
+            while let sb = ao.copyNextSampleBuffer() {
+                if let bb = CMSampleBufferGetDataBuffer(sb) {
+                    var len = 0; var ptr: UnsafeMutablePointer<CChar>?
+                    CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &len, dataPointerOut: &ptr)
+                    pcmBytes += len
+                    if let ptr { ptr.withMemoryRebound(to: Int16.self, capacity: len / 2) { p in for k in stride(from: 0, to: len / 2, by: 50) where abs(Int(p[k])) > 300 { nonSilent += 1 } } }
+                }
+            }
+            print(String(format: "   聲音軌：%@ %.0f Hz %d 聲道、時長 %.1f 秒（影像軌 %.1f 秒）；解碼回 PCM %d bytes，非靜音取樣點 %d",
+                         sub == kAudioFormatMPEG4AAC ? "AAC" : String(format: "0x%08X", sub), asbd?.mSampleRate ?? 0, asbd?.mChannelsPerFrame ?? 0,
+                         tr.duration.seconds, dur, pcmBytes, nonSilent))
+        } else {
+            print("   聲音軌：無")
+        }
         // 解出頭尾畫面（不輸出內容，只檢查亮度分佈）
         let gen = AVAssetImageGenerator(asset: asset)
         gen.requestedTimeToleranceBefore = .zero
@@ -491,7 +514,7 @@ func runExport(host: String, port: Int, user: String, rest: [String], args: Args
             return 0
         }
         let r = try await RecordingExporter.export(connection: conn, channelId: ch.id, start: start, end: end,
-                                                   mainStream: args.bool("main"), to: url) { p in
+                                                   mainStream: args.bool("main"), includeAudio: !args.bool("no-audio"), to: url) { p in
             lastPrint.lock.withLock {
                 if p.frames - lastPrint.frames >= 200 || p.fraction >= 1 {
                     lastPrint.frames = p.frames
@@ -505,7 +528,7 @@ func runExport(host: String, port: Int, user: String, rest: [String], args: Args
         print(String(format: "■ 完成：%d 幀（關鍵幀 %d）、%.1f MB、%@ %dx%d、錄影 %@ → %@（%.1f 秒）、壓縮空檔 %d 處",
                      r.frames, r.keyframes, Double(r.bytes) / 1e6, r.codec.rawValue, r.width, r.height,
                      df.string(from: r.firstFrameTime), df.string(from: r.lastFrameTime), media, r.gapsRemoved))
-        print(String(format: "   耗時 %.1f 秒（約即時 %.1f 倍）", el, media / max(el, 0.001)))
+        print(String(format: "   耗時 %.1f 秒（約即時 %.1f 倍）；聲音訊框 %d 個", el, media / max(el, 0.001), r.audioFrames))
         print("   檔案（僅本機）：\(url.path)")
         await verifyMP4(url)
     } catch {

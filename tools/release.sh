@@ -1,14 +1,15 @@
 #!/bin/zsh
-# 發佈新版本（編譯 → DMG → Sparkle 簽章 → 印出 appcast 項目）
+# 發佈新版本：版本號 → Release 編譯 → DMG → Sparkle 簽章 → 產生並簽章 appcast.xml
 #
-# 用法：tools/release.sh <版本，例如 0.3> <內部版本號，必須遞增，例如 3>
+# 用法：SPARKLE_BIN=<Sparkle 發行包>/bin tools/release.sh <版本，例如 0.3> <內部版本號（必須遞增），例如 3>
 #
-# 需要：Sparkle 工具（sign_update）路徑放在環境變數 SPARKLE_BIN，例如
-#   SPARKLE_BIN=~/Tools/Sparkle-2.10.0/bin tools/release.sh 0.3 3
-# 私鑰在鑰匙圈（帳號 local.dvrviewer.app，由 generate_keys --account local.dvrviewer.app 產生）。
-# 完成後：把印出的 <item> 加到 appcast.xml 最上方、commit、推送，再用
-#   gh release create v<版本> dist/DVR-Viewer-<版本>.dmg
-# 上傳 DMG（appcast 中的下載網址指向該 Release）。
+# 事前準備：
+#   1. 在 RELEASE_NOTES.md 最上方加入「v<版本>」段落（由新到舊列出每個版本的更新內容）
+#   2. Sparkle 工具：https://github.com/sparkle-project/Sparkle/releases（解壓後的 bin 資料夾）
+#   3. EdDSA 私鑰在鑰匙圈（帳號 local.dvrviewer.app；換電腦時用 generate_keys --account local.dvrviewer.app -f <備份檔> 匯入）
+#
+# 完成後：commit 並推送（含 appcast.xml），再執行腳本最後印出的 gh release create 指令上傳 DMG。
+# appcast 只放最新版本；更新說明（Markdown）包含 RELEASE_NOTES.md 的完整歷史。
 
 set -euo pipefail
 ver="${1:-}"; build="${2:-}"
@@ -16,15 +17,23 @@ ver="${1:-}"; build="${2:-}"
 : "${SPARKLE_BIN:?請設定 SPARKLE_BIN（Sparkle 發行包的 bin 資料夾）}"
 cd "$(dirname "$0")/.."
 
-proj=mac/DVRViewer.xcodeproj/project.pbxproj
-sed -i '' -E "s/MARKETING_VERSION = [0-9.]+;/MARKETING_VERSION = $ver;/; s/CURRENT_PROJECT_VERSION = [0-9]+;/CURRENT_PROJECT_VERSION = $build;/" "$proj"
-sed -i '' -E "s/MARKETING_VERSION = [0-9.]+;/MARKETING_VERSION = $ver;/; s/CURRENT_PROJECT_VERSION = [0-9]+;/CURRENT_PROJECT_VERSION = $build;/" "$proj"
+repo="doghsiao412/mac-dvr-viewer"
+account="local.dvrviewer.app"
+minos="26.0"
 
+head -1 RELEASE_NOTES.md | grep -qx "v$ver" || { echo "RELEASE_NOTES.md 第一行必須是 v$ver"; exit 1; }
+
+proj=mac/DVRViewer.xcodeproj/project.pbxproj
+sed -i '' -E "s/MARKETING_VERSION = [0-9.]+;/MARKETING_VERSION = $ver;/g; s/CURRENT_PROJECT_VERSION = [0-9]+;/CURRENT_PROJECT_VERSION = $build;/g" "$proj"
+
+echo "■ Release 編譯 $ver（$build）"
 xcodebuild -project mac/DVRViewer.xcodeproj -scheme DVRViewer -configuration Release \
   -derivedDataPath mac/build/DerivedData clean build | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
 app="mac/build/DerivedData/Build/Products/Release/DVR Viewer.app"
 codesign --verify --deep --strict "$app"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")" == "$ver" ]]
 
+echo "■ 製作 DMG"
 stage="$(mktemp -d)"
 ditto "$app" "$stage/DVR Viewer.app"
 ln -s /Applications "$stage/應用程式"
@@ -33,22 +42,40 @@ dmg="dist/DVR-Viewer-$ver.dmg"
 rm -f "$dmg"
 hdiutil create -volname "DVR Viewer $ver" -srcfolder "$stage" -ov -format UDZO -fs HFS+ "$dmg" >/dev/null
 rm -rf "$stage"
+hdiutil verify "$dmg" >/dev/null
 
-sig="$("$SPARKLE_BIN/sign_update" --account local.dvrviewer.app "$dmg")"
-pub="$(LC_ALL=en_US.UTF-8 date -u "+%a, %d %b %Y %H:%M:%S +0000")"
-cat <<ITEM
+echo "■ Sparkle 簽章"
+sig="$("$SPARKLE_BIN/sign_update" --account "$account" "$dmg")"
+pub="$(LC_ALL=en_US.UTF-8 date -u "+%a, %d %b %Y %H:%M:%S GMT")"
+notes="$(cat RELEASE_NOTES.md)"
 
-=== 加到 appcast.xml 的 <channel> 內（最新版本放最上面）===
+cat > appcast.xml <<XML
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>DVR Viewer 更新</title>
     <item>
       <title>DVR Viewer $ver</title>
       <pubDate>$pub</pubDate>
       <sparkle:version>$build</sparkle:version>
       <sparkle:shortVersionString>$ver</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[ <ul><li>（更新內容）</li></ul> ]]></description>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v$ver/DVR-Viewer-$ver.dmg"
-                 $sig
-                 type="application/octet-stream" />
+      <sparkle:minimumSystemVersion>$minos</sparkle:minimumSystemVersion>
+      <description sparkle:format="markdown"><![CDATA[$notes
+]]></description>
+      <sparkle:fullReleaseNotesLink>https://github.com/$repo/blob/v$ver/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/$repo/releases/download/v$ver/DVR-Viewer-$ver.dmg" $sig type="application/octet-stream"></enclosure>
     </item>
-ITEM
-echo "DMG：$dmg"
+  </channel>
+</rss>
+XML
+xmllint --noout appcast.xml
+"$SPARKLE_BIN/sign_update" --account "$account" appcast.xml   # 簽章嵌入 appcast 檔尾
+"$SPARKLE_BIN/sign_update" --account "$account" --verify appcast.xml
+
+# 本版的更新說明（給 GitHub Release）
+awk -v v="v$ver" 'NR==1 && $0==v {on=1; next} /^v[0-9]/ {on=0} on' RELEASE_NOTES.md > "dist/notes-$ver.md"
+
+echo
+echo "完成：$dmg"
+echo "下一步：commit 並推送（含 appcast.xml、RELEASE_NOTES.md），再執行："
+echo "  gh release create v$ver $dmg --repo $repo --title \"DVR Viewer $ver\" --notes-file dist/notes-$ver.md"

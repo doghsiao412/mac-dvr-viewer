@@ -58,16 +58,15 @@ struct VideoTile: View {
         } else {
             switch controller.phase {
             case .connecting, .idle:
-                ProgressView().controlSize(.small).tint(.white)
+                ProgressView().controlSize(.small).padding(10).glassEffect(.regular, in: .circle)
             case .reconnecting(let why):
                 VStack(spacing: 4) {
-                    ProgressView().controlSize(.small).tint(.white)
+                    ProgressView().controlSize(.small)
                     Text("重新連線中").font(.caption)
                     Text(why).font(.caption2).lineLimit(2).multilineTextAlignment(.center)
                 }
-                .foregroundStyle(.white)
-                .padding(8)
-                .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                .padding(10)
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
             case .playing:
                 EmptyView()
             }
@@ -77,31 +76,30 @@ struct VideoTile: View {
     private func badge(_ text: String, _ symbol: String) -> some View {
         Label(text, systemImage: symbol)
             .font(.caption)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(.black.opacity(0.6), in: Capsule())
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .glassEffect(.regular, in: .capsule)
     }
 
     private var nameBar: some View {
         HStack(spacing: 6) {
             Text(device.displayName(ref.channelID)).fontWeight(.medium)
             if audioOn { Image(systemName: "speaker.wave.2.fill").foregroundStyle(.yellow) }
-            if mainStream { Text("主").font(.caption2).padding(.horizontal, 3).background(.white.opacity(0.25), in: RoundedRectangle(cornerRadius: 3)) }
+            if mainStream { Text("主").font(.caption2.weight(.semibold)).foregroundStyle(.tint) }
             if let t = controller.lastFrameTime {
-                Text(t, format: .dateTime.hour().minute().second()).monospacedDigit().foregroundStyle(.white.opacity(0.8))
+                Text(t, format: .dateTime.hour().minute().second()).monospacedDigit().foregroundStyle(.secondary)
             }
             if zoom > 1.01 { Text(String(format: "%.1f×", zoom)).foregroundStyle(.yellow) }
         }
         .font(.caption)
-        .foregroundStyle(.white)
-        .padding(.horizontal, 6).padding(.vertical, 3)
-        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 4))
+        .padding(.horizontal, 10).padding(.vertical, 4)
+        .glassEffect(.regular, in: .capsule)
         .padding(6)
         .allowsHitTesting(false)
     }
 
     private var tileButtons: some View {
-        HStack(spacing: 4) {
+        GlassEffectContainer(spacing: 6) {
+        HStack(spacing: 6) {
             if zoom > 1.01 {
                 iconButton("arrow.down.right.and.arrow.up.left", "重設縮放") { resetZoom() }
             }
@@ -112,6 +110,7 @@ struct VideoTile: View {
                 store.saveSnapshot(controller.renderer.lastPixelBuffer, name: device.displayName(ref.channelID),
                                    time: controller.renderer.lastTime)
             }
+        }
         }
         .padding(6)
     }
@@ -127,11 +126,11 @@ struct VideoTile: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.caption)
-                .frame(width: 24, height: 22)
-                .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 5))
-                .foregroundStyle(.white)
+                .frame(width: 18, height: 18)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .controlSize(.small)
         .help(help)
     }
 

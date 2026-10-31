@@ -15,6 +15,7 @@ struct ExportSheet: View {
     @State private var minutes = 5
     @State private var custom = false
     @State private var mainStream = false
+    @State private var includeAudio = true
     @State private var folder = ExportManager.defaultFolder
 
     private let presets = [1, 5, 10, 30, 60]
@@ -53,7 +54,7 @@ struct ExportSheet: View {
                         Text(recordedText).foregroundStyle(recordedSeconds > 0 ? Color.secondary : Color.orange)
                     }
                 } header: { Text("時間範圍") } footer: {
-                    Text("無錄影的空檔會自動略過；影像不轉碼，直接存成 MP4（H.265/H.264）。")
+                    Text("無錄影的空檔會自動略過；影像不轉碼（H.265/H.264），聲音轉為 AAC，存成 MP4。")
                         .foregroundStyle(.secondary)
                 }
                 Section("輸出") {
@@ -61,6 +62,7 @@ struct ExportSheet: View {
                         Text("子串流（檔案較小）").tag(false)
                         Text("主串流（高畫質）").tag(true)
                     }
+                    Toggle("包含聲音（轉為 AAC）", isOn: $includeAudio)
                     LabeledContent("儲存位置") {
                         HStack {
                             Text(folder.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle)
@@ -82,6 +84,7 @@ struct ExportSheet: View {
                 Button("關閉") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("開始下載") { startExport() }
+                    .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
                     .disabled(device == nil || effectiveEnd <= start)
             }
@@ -124,7 +127,7 @@ struct ExportSheet: View {
         }
         store.exports.start(connection: dev.connection, channelID: ref.channelID,
                             title: "\(dev.config.name) · \(store.name(of: ref))", start: start, end: e,
-                            mainStream: mainStream, to: url) { job in
+                            mainStream: mainStream, includeAudio: includeAudio, to: url) { job in
             switch job.state {
             case .done: store.showToast("下載完成：\(job.url.lastPathComponent)")
             case .failed(let m): store.showToast("下載失敗：\(m)")
