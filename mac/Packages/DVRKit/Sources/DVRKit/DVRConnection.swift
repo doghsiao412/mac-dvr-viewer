@@ -110,11 +110,25 @@ public actor DVRConnection {
             analogChannels: Int(caps["analogChlCount"] ?? "") ?? 0,
             ipChannels: Int(caps["ipChlMaxCount"] ?? "") ?? 0)
         channels = try await withSession { try await $0.channels() }
-        supportsWebStreaming = await Self.probeWebStreaming(host: host, port: port)
+        // 韌體類型不會變：已知就不再偵測。DVR 忙碌（多路串流）時網頁回應可能逾時，
+        // 不能把已知結果覆蓋成「未知」，否則所有畫面會停下來等待。
+        if supportsWebStreaming == nil {
+            for attempt in 0..<3 where supportsWebStreaming == nil {
+                if attempt > 0 { try? await Task.sleep(for: .seconds(2)) }
+                supportsWebStreaming = await Self.probeWebStreaming(host: host, port: port)
+            }
+        }
         return channels
     }
 
     /// 以 DVR 網頁是否提供 `js/lib/websocket.cmd.js` 判斷（2019 版韌體為 404，2021 版為 200）
+    /// 再偵測一次韌體類型（先前逾時、仍未知時使用）
+    @discardableResult
+    public func reprobeWebStreamingIfNeeded() async -> Bool? {
+        if supportsWebStreaming == nil { supportsWebStreaming = await Self.probeWebStreaming(host: host, port: port) }
+        return supportsWebStreaming
+    }
+
     static func probeWebStreaming(host: String, port: Int) async -> Bool? {
         guard let url = URL(string: "http://\(host):\(port)/js/lib/websocket.cmd.js") else { return nil }
         var req = URLRequest(url: url, timeoutInterval: 10)

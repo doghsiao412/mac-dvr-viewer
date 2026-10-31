@@ -34,18 +34,24 @@ final class LiveTileController {
 
     /// 執行直到所屬 Task 被取消（View 消失或頻道改變）
     func run(connection: DVRConnection, channelID: String, mainStream: Bool) async {
+        // 切換頻道／頁面時，舊的播放器會在背景慢慢結束；它的回報（尤其是最後的「已停止」）
+        // 可能晚於新播放器的「播放中」。用 token 只接受這一次的回報，避免畫面一直轉圈。
+        current?.active = false
+        let token = RunToken()
+        current = token
         renderer.clear()
         let p = LiveStreamPlayer(connection: connection, channelId: channelID, mainStream: mainStream)
         let r = renderer
         // 時間顯示只需約每秒更新數次：在解碼執行緒節流，不要每幀都切到主執行緒
         let gate = UpdateGate(interval: 0.25)
         p.onFrame = { [weak self] pb, t in
+            guard token.active else { return }
             r.enqueue(pb, time: t)
-            if gate.pass() { Task { @MainActor [weak self] in self?.lastFrameTime = t } }
+            if gate.pass() { Task { @MainActor [weak self] in if token.active { self?.lastFrameTime = t } } }
         }
         p.onState = { [weak self] s in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, token.active else { return }
                 switch s {
                 case .connecting: self.phase = .connecting
                 case .playing: self.phase = .playing
@@ -56,7 +62,7 @@ final class LiveTileController {
         }
         p.onAudioUnsupported = { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, token.active else { return }
                 self.audioUnsupported = true
                 self.onAudioUnsupported?()
             }
@@ -69,9 +75,15 @@ final class LiveTileController {
             try? await Task.sleep(for: .seconds(3600))
         }
         p.stop()
-        player = nil
-        phase = .idle
+        // 新的一次已經開始時，不要動到它的狀態
+        if token.active {
+            token.active = false
+            player = nil
+            phase = .idle
+        }
     }
+
+    private var current: RunToken?
 
 }
 
@@ -114,12 +126,13 @@ final class PlaybackController {
             p.onFrame = { pb, t in r.enqueue(pb, time: t) }
             // 目前時間每秒更新約 10 次即可（每幀更新會讓整個回放畫面重繪）
             let gate = UpdateGate(interval: 0.1)
-            p.onTime = { [weak self] t in
-                if gate.pass() { Task { @MainActor [weak self] in self?.currentTime = t } }
+            // 只接受目前這個播放器的回報（舊播放器結束時的「已停止」可能晚到）
+            p.onTime = { [weak self, weak p] t in
+                if gate.pass() { Task { @MainActor [weak self, weak p] in if let self, let p, self.player === p { self.currentTime = t } } }
             }
-            p.onState = { [weak self] s in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
+            p.onState = { [weak self, weak p] s in
+                Task { @MainActor [weak self, weak p] in
+                    guard let self, let p, self.player === p else { return }
                     switch s {
                     case .loading: self.phase = .loading
                     case .playing: self.phase = .playing
@@ -168,6 +181,16 @@ final class PlaybackController {
         player = nil
         key = nil
         phase = .idle
+    }
+}
+
+/// 一次播放的有效旗標（跨執行緒讀取）
+final class RunToken: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _active = true
+    var active: Bool {
+        get { lock.withLock { _active } }
+        set { lock.withLock { _active = newValue } }
     }
 }
 

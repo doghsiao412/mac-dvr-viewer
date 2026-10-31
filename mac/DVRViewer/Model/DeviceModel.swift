@@ -86,12 +86,18 @@ final class DeviceModel: Identifiable {
                 let conn = connection
                 channels = try await conn.connect()
                 info = await conn.info
-                webStreaming = await conn.supportsWebStreaming
+                // 已知的韌體類型不覆蓋成未知（避免所有畫面停下來）
+                if let w = await conn.supportsWebStreaming { webStreaming = w }
                 online = (try? await conn.onlineChannelIds()) ?? Set(channels.map(\.id))
                 status = .online
                 retry = 5
-                // 保活與在線狀態：每 30 秒
+                // 保活與在線狀態：每 30 秒；韌體類型仍未知時每 5 秒再偵測
                 while !Task.isCancelled {
+                    if webStreaming == nil {
+                        try await Task.sleep(for: .seconds(5))
+                        if let w = await conn.reprobeWebStreamingIfNeeded() { webStreaming = w }
+                        continue
+                    }
                     try await Task.sleep(for: .seconds(30))
                     online = try await conn.onlineChannelIds()
                 }

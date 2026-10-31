@@ -761,6 +761,31 @@ func runMultiLive(conn: DVRConnection, channels: [DVRChannel], seconds: Int) asy
 }
 
 /// 與 App 相同：N 個 LiveStreamPlayer 同時播放，定期列出每個頻道的解碼幀數與狀態
+func runPageSwitch(conn: DVRConnection, all: [DVRChannel], per: Int, rounds: Int, hold: Int) async {
+    // 模擬 App 換頁：關掉目前一頁的播放器（不等待關閉完成），立刻開下一頁
+    final class Stat: @unchecked Sendable { let lock = NSLock(); var frames: [Int: Int] = [:] }
+    var players: [LiveStreamPlayer] = []
+    let pages = stride(from: 0, to: all.count, by: per).map { Array(all[$0..<min($0 + per, all.count)]) }
+    for r in 0..<rounds {
+        players.forEach { $0.stop() }
+        let page = pages[r % pages.count]
+        let st = Stat()
+        players = page.map { ch in
+            let n = ch.index + 1
+            let p = LiveStreamPlayer(connection: conn, channelId: ch.id, mainStream: false)
+            p.onFrame = { _, _ in st.lock.withLock { st.frames[n, default: 0] += 1 } }
+            p.start(); return p
+        }
+        try? await Task.sleep(for: .seconds(hold))
+        let f = st.lock.withLock { st.frames }
+        let dead = page.filter { (f[$0.index + 1] ?? 0) == 0 }.map { "\($0.index + 1)" }
+        print("第 \(r + 1) 次（頁 \(r % pages.count + 1)）：" + page.map { "\($0.index + 1):\(f[$0.index + 1] ?? 0)" }.joined(separator: " ")
+              + (dead.isEmpty ? "" : "  ✖ 無畫面：" + dead.joined(separator: ",")))
+    }
+    players.forEach { $0.stop() }
+    try? await Task.sleep(for: .seconds(1))
+}
+
 func runMultiPlayer(conn: DVRConnection, channels: [DVRChannel], seconds: Int) async {
     final class Stat: @unchecked Sendable {
         let lock = NSLock(); var frames: [Int: Int] = [:]; var state: [Int: String] = [:]
@@ -819,7 +844,11 @@ func run() async -> Int32 {
         let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
         do {
             let chls = try await conn.connect()
-            await runMultiPlayer(conn: conn, channels: Array(chls.prefix(Int(rest.first ?? "16") ?? 16)), seconds: args.int("seconds", 30))
+            if args.flags["pages"] != nil {
+                await runPageSwitch(conn: conn, all: chls, per: Int(rest.first ?? "9") ?? 9, rounds: args.int("pages", 8), hold: args.int("hold", 8))
+            } else {
+                await runMultiPlayer(conn: conn, channels: Array(chls.prefix(Int(rest.first ?? "16") ?? 16)), seconds: args.int("seconds", 30))
+            }
         } catch { print("✖ \(error.localizedDescription)"); return 1 }
         await conn.disconnect()
         return 0

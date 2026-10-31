@@ -4,12 +4,19 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.5</title>
-      <pubDate>Sat, 31 Oct 2026 02:24:57 GMT</pubDate>
-      <sparkle:version>6</sparkle:version>
-      <sparkle:shortVersionString>0.5</sparkle:shortVersionString>
+      <title>DVR Viewer 0.6</title>
+      <pubDate>Sat, 31 Oct 2026 02:46:37 GMT</pubDate>
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>0.6</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.5
+      <description sparkle:format="markdown"><![CDATA[v0.6
+
+- 可建立多個自訂畫面：在左上角選單新增、重新命名、移除，每個畫面各自記住分割與頻道排列。
+- 新增「編輯 DVR 順序」：左上角選單最下方，拖曳或用箭頭調整，側邊欄、選單與 ⌥⌘1–9 都依此順序。
+- 畫面切換後若停在讀取狀態，會自動重新連線。
+- 左上角選單依名稱長度自動調整寬度，不再截斷名稱。
+
+v0.5
 
 - 新增「DVR 畫面」：工具列左上角選擇 DVR，即可顯示整台 DVR 的所有頻道（依左側順序、不可修改）；可選 1／4／9／16 分割，頻道較多時以換頁瀏覽（⌘[／⌘]）。
 - 原本可自由排列的畫面改名為「自訂畫面」，可從左側點選或拖曳任何 DVR 的頻道。
@@ -56,11 +63,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.5/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.5/DVR-Viewer-0.5.dmg" sparkle:edSignature="oU6bNWjCwIQl1+wkQu4yoTG1KkfM/UaWrFqmssNt1skDFe8w2nI1WEZqgGU9s28kHtXlUy55dl1dfT9UtVvDAw==" length="2265646" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.6/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.6/DVR-Viewer-0.6.dmg" sparkle:edSignature="+MDeyqrTseavnfcwZt0U1Cg4pOSp/vmfC4THVcMzSBVM2eAGsB+WQ3utByS/NHjSTnINK0I0naXBx7HTEx9WBA==" length="2329738" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: G+hKSd67k0FUIDk+gHS9roxvjsY0WH6QTl5PkSpog0y8j7ClaAAQxGWM/KWj3oEWYKSer0YcQ7vBnA0B89YADA==
-length: 4494
+edSignature: ZbhCVQF+0v8H4PDVaR7MiB02quFdg3WuA8iicEEWqSCPevbBKNZhjmHz6r//oCgupW+q/YzpHejFAYnbbh7nBQ==
+length: 4915
 -->

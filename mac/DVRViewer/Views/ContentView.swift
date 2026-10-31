@@ -90,6 +90,8 @@ struct ContentView: View {
         .onChange(of: store.renaming) { _, r in
             if let r { renameText = store.name(of: r) }
         }
+        .sheet(isPresented: $store.editingDeviceOrder) { DeviceOrderSheet() }
+        .modifier(CustomViewDialogs())
         .sheet(item: $editor) { target in
             DeviceEditorView(target: target)
         }
@@ -116,13 +118,18 @@ struct DeviceSwitcher: View {
         let current = store.currentDeviceID
         Menu {
             if store.mode == .live {
-                Button {
-                    store.switchToCustom()
-                } label: {
-                    if current == nil { Label("自訂畫面", systemImage: "checkmark") } else { Text("自訂畫面") }
+                Section("自訂畫面") {
+                    ForEach(store.customViews) { v in
+                        Button {
+                            store.switchToCustom(v.id)
+                        } label: {
+                            if current == nil && v.id == store.customID { Label(v.name, systemImage: "checkmark") } else { Text(v.name) }
+                        }
+                    }
                 }
                 Divider()
             }
+            Section("DVR") {
             ForEach(store.devices) { dev in
                 Button {
                     store.switchTo(dev.id)
@@ -130,13 +137,115 @@ struct DeviceSwitcher: View {
                     if dev.id == current { Label(dev.config.name, systemImage: "checkmark") } else { Text(dev.config.name) }
                 }
             }
+            }
+            Divider()
+            if store.mode == .live {
+                Button("新增自訂畫面…") { store.customNameEdit = .new }
+                if current == nil, let c = store.currentCustom {
+                    Button("重新命名「\(c.name)」…") { store.customNameEdit = .rename(c.id) }
+                    Button("移除「\(c.name)」…") { store.deletingCustom = c.id }
+                        .disabled(store.customViews.count <= 1)
+                }
+            }
+            if store.devices.count > 1 {
+                Button("編輯 DVR 順序…") { store.editingDeviceOrder = true }
+            }
         } label: {
-            if let c = current.flatMap({ store.device($0) }) {
-                Label(c.config.name, systemImage: "server.rack").labelStyle(.titleAndIcon)
-            } else {
-                Label("自訂畫面", systemImage: "square.grid.2x2").labelStyle(.titleAndIcon)
+            // 自己畫標籤：箭頭固定在最右側，寬度依名稱自動調整
+            let dev = current.flatMap { store.device($0) }
+            HStack(spacing: 6) {
+                Image(systemName: dev != nil ? "server.rack" : "square.grid.2x2")
+                Text(dev?.config.name ?? store.currentCustom?.name ?? "自訂畫面")
+                    .lineLimit(1)
+                    .fixedSize()
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
             }
         }
+        .menuIndicator(.hidden)
+        // 依名稱長度顯示完整名稱（工具列預設會把文字截斷）
+        .fixedSize()
         .help("DVR 畫面顯示整台 DVR 的所有頻道；自訂畫面可從左側自選頻道（⌥⌘0 自訂、⌥⌘1–⌥⌘9 DVR、⌥⌘←／→ 上一台／下一台）")
+    }
+}
+
+/// 編輯 DVR 順序：拖曳列調整（側邊欄、切換選單與 ⌥⌘1–9 都依此順序）
+struct DeviceOrderSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("編輯 DVR 順序").font(.headline).padding([.horizontal, .top], 16)
+            Text("拖曳調整順序，或用右側箭頭移動。").font(.callout).foregroundStyle(.secondary)
+                .padding(.horizontal, 16).padding(.top, 4)
+            List {
+                ForEach(Array(store.devices.enumerated()), id: \.element.id) { i, dev in
+                    HStack {
+                        Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
+                        Text(i < 9 ? "⌥⌘\(i + 1)" : "").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            .frame(width: 34, alignment: .leading)
+                        Text(dev.config.name)
+                        Spacer()
+                        Button { withAnimation(.snappy) { store.moveDevice(dev.id, by: -1) } } label: { Image(systemName: "chevron.up") }
+                            .disabled(i == 0)
+                        Button { withAnimation(.snappy) { store.moveDevice(dev.id, by: 1) } } label: { Image(systemName: "chevron.down") }
+                            .disabled(i == store.devices.count - 1)
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(.vertical, 3)
+                }
+                .onMove { store.moveDevices(fromOffsets: $0, toOffset: $1) }
+            }
+            .listStyle(.inset)
+            .frame(minHeight: 220)
+            HStack {
+                Spacer()
+                Button("完成") { dismiss() }
+                    .buttonStyle(.glassProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(16)
+        }
+        .frame(width: 380, height: 360)
+    }
+}
+
+/// 自訂畫面的新增／重新命名／移除對話框
+struct CustomViewDialogs: ViewModifier {
+    @Environment(AppStore.self) private var store
+    @State private var customName = ""
+
+    func body(content: Content) -> some View {
+        content
+            .alert(store.customNameEdit == .new ? "新增自訂畫面" : "重新命名自訂畫面",
+                   isPresented: Binding(get: { store.customNameEdit != nil }, set: { if !$0 { store.customNameEdit = nil } })) {
+                TextField("名稱", text: $customName)
+                Button(store.customNameEdit == .new ? "新增" : "儲存") {
+                    switch store.customNameEdit {
+                    case .new: store.addCustomView(named: customName)
+                    case .rename(let id): store.renameCustomView(id, to: customName)
+                    case nil: break
+                    }
+                    store.customNameEdit = nil
+                }
+                Button("取消", role: .cancel) { store.customNameEdit = nil }
+            } message: {
+                if store.customNameEdit == .new { Text("新增後從左側點選或拖曳頻道到格子中。") }
+            }
+            .onChange(of: store.customNameEdit) { _, e in
+                switch e {
+                case .new: customName = "自訂畫面 \(store.customViews.count + 1)"
+                case .rename(let id): customName = store.customViews.first { $0.id == id }?.name ?? ""
+                case nil: break
+                }
+            }
+            .confirmationDialog("移除這個自訂畫面？",
+                                isPresented: Binding(get: { store.deletingCustom != nil }, set: { if !$0 { store.deletingCustom = nil } }),
+                                presenting: store.deletingCustom.flatMap { id in store.customViews.first { $0.id == id } }) { v in
+                Button("移除「\(v.name)」", role: .destructive) { store.deleteCustomView(v.id); store.deletingCustom = nil }
+            } message: { _ in
+                Text("只會移除這個畫面的排列，不影響 DVR 或錄影。")
+            }
     }
 }

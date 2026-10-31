@@ -13,8 +13,28 @@ final class AppStore {
     var mode: ViewMode = .live { didSet { saveUI() } }
 
     // Live
-    var layout: Int = 4 { didSet { saveUI() } }          // 1 / 4 / 9 / 16
-    var slots: [CameraRef?] = Array(repeating: nil, count: AppStore.maxSlots) { didSet { saveUI() } }
+    // 目前自訂畫面的工作副本（變更會寫回 customViews）
+    var layout: Int = 4 { didSet { syncCustom() } }          // 1 / 4 / 9 / 16
+    var slots: [CameraRef?] = Array(repeating: nil, count: AppStore.maxSlots) { didSet { syncCustom() } }
+
+    /// 使用者建立的自訂畫面（可新增、移除、命名）
+    struct CustomView: Codable, Identifiable, Equatable {
+        var id = UUID()
+        var name: String
+        var layout: Int = 4
+        var slots: [CameraRef?] = Array(repeating: nil, count: AppStore.maxSlots)
+    }
+    var customViews: [CustomView] = [] { didSet { saveUI() } }
+    private(set) var customID: UUID?
+    var currentCustom: CustomView? { customViews.first { $0.id == customID } }
+
+    private func syncCustom() {
+        guard !loadingUI, let i = customViews.firstIndex(where: { $0.id == customID }) else { saveUI(); return }
+        if customViews[i].slots != slots || customViews[i].layout != layout {
+            customViews[i].slots = slots
+            customViews[i].layout = layout
+        }
+    }
     var focusedSlot: Int = 0
     var enlargedSlot: Int?
     var slotMainStream: [Int: Bool] = [:]
@@ -94,6 +114,7 @@ final class AppStore {
         m.stop()
         devices.removeAll { $0.id == id }
         KeychainStore.deletePassword(for: id)
+        for i in customViews.indices { customViews[i].slots = customViews[i].slots.map { $0?.deviceID == id ? nil : $0 } }
         slots = slots.map { $0?.deviceID == id ? nil : $0 }
         if playbackRef?.deviceID == id { playbackRef = nil }
         if liveDeviceID == id { liveDeviceID = nil }
@@ -101,6 +122,45 @@ final class AppStore {
     }
 
     func persistDevices() { DevicePersistence.save(devices.map(\.config)) }
+
+    // MARK: - DVR 排序（側邊欄、切換選單與 ⌥⌘1–9 都依此順序）
+
+    /// 把 DVR 移到另一台的前面（拖曳排序）
+    func moveDevice(_ id: UUID, before target: UUID) {
+        guard id != target, let from = devices.firstIndex(where: { $0.id == id }) else { return }
+        let m = devices.remove(at: from)
+        let to = devices.firstIndex(where: { $0.id == target }) ?? devices.count
+        devices.insert(m, at: to)
+        persistDevices()
+    }
+
+    /// 「編輯順序」視窗
+    var editingDeviceOrder = false
+
+    /// 自訂畫面命名對話框：新增（nil）或重新命名（id）
+    enum CustomNameEdit: Equatable { case new, rename(UUID) }
+    var customNameEdit: CustomNameEdit?
+    var deletingCustom: UUID?
+
+    /// 清單拖曳排序（List.onMove）
+    func moveDevices(fromOffsets: IndexSet, toOffset: Int) {
+        devices.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        persistDevices()
+    }
+
+    /// 上移（-1）／下移（+1）
+    func moveDevice(_ id: UUID, by offset: Int) {
+        guard let i = devices.firstIndex(where: { $0.id == id }) else { return }
+        let j = i + offset
+        guard devices.indices.contains(j) else { return }
+        devices.swapAt(i, j)
+        persistDevices()
+    }
+
+    func canMoveDevice(_ id: UUID, by offset: Int) -> Bool {
+        guard let i = devices.firstIndex(where: { $0.id == id }) else { return false }
+        return devices.indices.contains(i + offset)
+    }
 
     func rename(_ ref: CameraRef, to name: String) {
         guard let m = device(ref.deviceID) else { return }
@@ -184,10 +244,50 @@ final class AppStore {
         dvrPage = ((dvrPage + offset) % pageCount + pageCount) % pageCount
     }
 
-    /// 切換到自訂畫面
-    func switchToCustom() {
+    /// 切換到自訂畫面（nil＝上次使用的自訂畫面）
+    func switchToCustom(_ id: UUID? = nil) {
         if mode == .playback { mode = .live }
+        if let id, id != customID, let v = customViews.first(where: { $0.id == id }) {
+            loadingUI = true
+            customID = id
+            layout = v.layout
+            slots = v.slots
+            loadingUI = false
+            enlargedSlot = nil
+            focusedSlot = 0
+            audioRef = nil
+            saveUI()
+        }
         liveDeviceID = nil
+    }
+
+    func addCustomView(named name: String) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        let v = CustomView(name: n.isEmpty ? "自訂畫面 \(customViews.count + 1)" : n)
+        customViews.append(v)
+        switchToCustom(v.id)
+    }
+
+    func renameCustomView(_ id: UUID, to name: String) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty, let i = customViews.firstIndex(where: { $0.id == id }) else { return }
+        customViews[i].name = n
+    }
+
+    /// 移除自訂畫面（至少保留一個）
+    func deleteCustomView(_ id: UUID) {
+        guard customViews.count > 1, let i = customViews.firstIndex(where: { $0.id == id }) else { return }
+        customViews.remove(at: i)
+        if customID == id {
+            let next = customViews[min(i, customViews.count - 1)]
+            customID = nil
+            if isCustomLive { switchToCustom(next.id) } else {
+                loadingUI = true
+                customID = next.id; layout = next.layout; slots = next.slots
+                loadingUI = false
+                saveUI()
+            }
+        }
     }
 
     /// 把整個畫面切到另一台 DVR。
@@ -309,19 +409,28 @@ final class AppStore {
         var slots: [CameraRef?]
         var playbackRef: CameraRef?
         var liveDeviceID: UUID?
+        var customViews: [CustomView]?
+        var customID: UUID?
     }
 
     private var loadingUI = false
 
     private func saveUI() {
         guard !loadingUI else { return }
-        let s = UIState(mode: mode, layout: layout, slots: slots, playbackRef: playbackRef, liveDeviceID: liveDeviceID)
+        let s = UIState(mode: mode, layout: layout, slots: slots, playbackRef: playbackRef, liveDeviceID: liveDeviceID,
+                        customViews: customViews, customID: customID)
         if let d = try? JSONEncoder().encode(s) { UserDefaults.standard.set(d, forKey: "uiState") }
     }
 
     private func loadUI() {
         loadingUI = true
-        defer { loadingUI = false }
+        defer {
+            // 舊版只有一個自訂畫面：搬成第一個自訂畫面
+            if customViews.isEmpty { customViews = [CustomView(name: "自訂畫面", layout: layout, slots: slots)] }
+            if currentCustom == nil, let f = customViews.first { customID = f.id; layout = f.layout; slots = f.slots }
+            loadingUI = false
+            saveUI()
+        }
         guard let d = UserDefaults.standard.data(forKey: "uiState"),
               let s = try? JSONDecoder().decode(UIState.self, from: d) else { return }
         mode = s.mode
@@ -332,6 +441,16 @@ final class AppStore {
         slots = Array(sl.prefix(Self.maxSlots)).map { r in r.flatMap { ids.contains($0.deviceID) ? $0 : nil } }
         playbackRef = s.playbackRef.flatMap { ids.contains($0.deviceID) ? $0 : nil }
         liveDeviceID = s.liveDeviceID.flatMap { ids.contains($0) ? $0 : nil }
+        if let cv = s.customViews, !cv.isEmpty {
+            customViews = cv.map { v in
+                var v = v
+                if v.slots.count < Self.maxSlots { v.slots += Array(repeating: nil, count: Self.maxSlots - v.slots.count) }
+                v.slots = v.slots.map { r in r.flatMap { ids.contains($0.deviceID) ? $0 : nil } }
+                return v
+            }
+            customID = s.customID
+            if let c = currentCustom { layout = c.layout; slots = c.slots }
+        }
     }
 
     // MARK: - 截圖
