@@ -26,11 +26,11 @@ struct DeviceEditorView: View {
                     TextField("名稱", text: $name, prompt: Text("例如：公司 DVR"))
                     TextField("IP 或主機名稱", text: $host, prompt: Text("192.168.1.100 或 mydvr.ddns.net"))
                     TextField("Port（網頁連接埠）", text: $port)
-                    TextField("影像服務 Port（非必要不需修改）", text: $servicePort)
+                    TextField("影像服務 Port（通常會自動帶入）", text: $servicePort)
                 } header: {
                     Text("DVR 位址")
                 } footer: {
-                    Text("Port 填 DVR 網頁的連接埠即可。「影像服務 Port」非必要不需修改，保持 6036；只有較舊韌體的 DVR，或想同時看超過 6 路即時影像時才會用到。若路由器把它轉發成其他 Port，再填外部 Port。")
+                    Text("Port 填 DVR 網頁的連接埠即可。「影像服務 Port」保持 6036 時，連線成功後會自動帶入 DVR 自己設定的 Port（DVR「網路 → 連接埠」中的伺服器 Port）。只有路由器把它轉發成不同號碼時，才需要手動填外部 Port。")
                         .foregroundStyle(.secondary)
                 }
                 Section {
@@ -103,9 +103,16 @@ struct DeviceEditorView: View {
         do {
             let chs = try await test.connect()
             let info = await test.info
+            let detected = await test.detectedServicePort
             await test.disconnect()
             resultOK = true
             result = "連線成功：\(info?.model ?? "DVR")，\(chs.count) 個頻道"
+            // 影像服務 Port 保持預設時，自動帶入 DVR 自己設定的 Port
+            if config.servicePort == nil, let d = detected, d != 6036 {
+                config.servicePort = d
+                servicePort = String(d)
+                result! += "；已自動帶入影像服務 Port \(d)"
+            }
             if isNew {
                 try store.add(config, password: pw)
             } else {

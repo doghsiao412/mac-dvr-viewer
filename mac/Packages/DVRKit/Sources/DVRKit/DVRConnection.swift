@@ -9,8 +9,12 @@ public actor DVRConnection {
     public nonisolated let host: String
     public nonisolated let port: Int
     public nonisolated let username: String
-    /// TVT 私有協定（SERVICE）連接埠：韌體不支援 WebSocket 時使用
-    public nonisolated let servicePort: Int
+    /// TVT 私有協定（SERVICE）連接埠：韌體不支援 WebSocket、或超過 WebSocket 上限時使用
+    public private(set) var servicePort: Int
+    /// 登入後改用 DVR 自己設定的影像服務 Port（使用者未自訂時）
+    private let autoDetectServicePort: Bool
+    /// DVR 自己設定的影像服務 Port（`queryUPnPCfg`；登入後取得，查不到為 nil）
+    public private(set) var detectedServicePort: Int?
     private let passwordProvider: @Sendable () throws -> String
     private var privateClient: TVTPrivateClient?
     private var privateConnectTask: Task<TVTPrivateClient, Error>?
@@ -40,11 +44,13 @@ public actor DVRConnection {
     }
 
     public init(host: String, port: Int, username: String, servicePort: Int = 6036,
+                autoDetectServicePort: Bool = false,
                 passwordProvider: @escaping @Sendable () throws -> String) {
         self.host = host
         self.port = port
         self.username = username
         self.servicePort = servicePort
+        self.autoDetectServicePort = autoDetectServicePort
         self.passwordProvider = passwordProvider
         self.client = NVMSClient(host: host, port: port)
     }
@@ -111,6 +117,13 @@ public actor DVRConnection {
             analogChannels: Int(caps["analogChlCount"] ?? "") ?? 0,
             ipChannels: Int(caps["ipChlMaxCount"] ?? "") ?? 0)
         channels = try await withSession { try await $0.channels() }
+        if detectedServicePort == nil {
+            detectedServicePort = try? await withSession { try await $0.servicePortSetting() }
+            // 尚未建立私有協定連線前才切換，避免中途換 Port
+            if autoDetectServicePort, let d = detectedServicePort, privateClient == nil, privateConnectTask == nil {
+                servicePort = d
+            }
+        }
         // 韌體類型不會變：已知就不再偵測。DVR 忙碌（多路串流）時網頁回應可能逾時，
         // 不能把已知結果覆蓋成「未知」，否則所有畫面會停下來等待。
         if supportsWebStreaming == nil {

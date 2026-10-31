@@ -674,7 +674,7 @@ func runPlaybackAudioProbe(client: NVMSClient, channel: DVRChannel, start: Date,
 /// 逐頻道開啟即時（audio=1），統計聲音訊框（不輸出內容）
 func runAudioScan(host: String, port: Int, user: String, args: Args) async -> Int32 {
     // --private：強制私有協定；--service-port：私有協定 Port（預設 6036）
-    let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
+    let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036), autoDetectServicePort: args.flags["service-port"] == nil) { try devPassword(user: user, host: host) }
     if args.bool("private") { await conn.setForcePrivateProtocol(true) }
     do {
         var chls = try await conn.connect()
@@ -873,7 +873,7 @@ func run() async -> Int32 {
     let rest = Array(args.positional.dropFirst(4))
     if cmd == "multiplayback" {
         // multiplayback <N> "yyyy-MM-dd HH:mm:ss" [--seconds S --speed X]
-        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036), autoDetectServicePort: args.flags["service-port"] == nil) { try devPassword(user: user, host: host) }
         do {
             let chls = try await conn.connect()
             let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd HH:mm:ss"
@@ -885,7 +885,7 @@ func run() async -> Int32 {
         return 0
     }
     if cmd == "multiplayer" {
-        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036), autoDetectServicePort: args.flags["service-port"] == nil) { try devPassword(user: user, host: host) }
         do {
             let chls = try await conn.connect()
             if args.flags["pages"] != nil {
@@ -899,7 +899,7 @@ func run() async -> Int32 {
     }
     if cmd == "multilive" {
         // multilive <N> [--private --service-port P --seconds S]
-        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036), autoDetectServicePort: args.flags["service-port"] == nil) { try devPassword(user: user, host: host) }
         if args.bool("private") { await conn.setForcePrivateProtocol(true) }
         do {
             let chls = try await conn.connect()
@@ -1054,6 +1054,12 @@ func run() async -> Int32 {
             guard let c = channel(rest.first) else { print("找不到頻道"); exitCode = 1; break }
             print("■ 即時截圖：頻道 #\(c.index + 1) \(c.name) \(args.bool("main") ? "主串流" : "子串流")")
             try await runSnapshot(client: client, channel: c, main: args.bool("main"), frames: args.int("frames", 30))
+
+        case "serviceport":
+            let conn = DVRConnection(host: host, port: port, username: user, autoDetectServicePort: true) { try devPassword(user: user, host: host) }
+            try await conn.connect()
+            print("■ DVR 設定的影像服務 Port：\(await conn.detectedServicePort.map(String.init) ?? "查不到")；連線將使用 \(await conn.servicePort)")
+            await conn.disconnect()
 
         case "raw":
             guard let command = rest.first else { print("用法：raw <指令> [xml-inner]"); exitCode = 1; break }

@@ -29,7 +29,7 @@ final class PhoneStore {
     private(set) var devices: [DeviceModel] = []
 
     init() {
-        devices = DevicePersistence.load().map(DeviceModel.init)
+        devices = DevicePersistence.load().map { makeModel($0) }
     }
 
     /// 切到背景時 iOS 會暫停 App、網路連線隨之失效：主動斷線，回到前景再重新登入
@@ -54,7 +54,7 @@ final class PhoneStore {
 
     func add(_ config: DeviceConfig, password: String) throws {
         try KeychainStore.setPassword(password, for: config.id)
-        let m = DeviceModel(config: config)
+        let m = makeModel(config)
         devices.append(m)
         persist()
         m.start()
@@ -83,6 +83,13 @@ final class PhoneStore {
     func move(from: IndexSet, to: Int) {
         devices.move(fromOffsets: from, toOffset: to)
         persist()
+    }
+
+    /// 建立設備模型並接上自動帶入設定的存檔
+    private func makeModel(_ c: DeviceConfig) -> DeviceModel {
+        let m = DeviceModel(config: c)
+        m.onConfigChanged = { [weak self] in self?.persist() }
+        return m
     }
 
     private func persist() {

@@ -33,6 +33,8 @@ final class DeviceModel: Identifiable {
     /// 這台裝置的鑰匙圈沒有此 DVR 的密碼（例如從其他 Mac 同步過來）
     private(set) var needsPassword = false
     private var loop: Task<Void, Never>?
+    /// 自動帶入 DVR 設定的影像服務 Port 後呼叫（由 Store 存檔／同步）
+    var onConfigChanged: (() -> Void)?
 
     nonisolated var id: UUID { _id }
     private nonisolated let _id: UUID
@@ -45,7 +47,9 @@ final class DeviceModel: Identifiable {
 
     static func makeConnection(_ c: DeviceConfig) -> DVRConnection {
         let id = c.id
-        return DVRConnection(host: c.host, port: c.port, username: c.username, servicePort: c.servicePort ?? 6036) {
+        // 未自訂影像服務 Port 時，登入後改用 DVR 自己設定的 Port
+        return DVRConnection(host: c.host, port: c.port, username: c.username, servicePort: c.servicePort ?? 6036,
+                             autoDetectServicePort: c.servicePort == nil) {
             try KeychainStore.password(for: id)
         }
     }
@@ -88,6 +92,7 @@ final class DeviceModel: Identifiable {
                 let conn = connection
                 channels = try await conn.connect()
                 info = await conn.info
+                await adoptDetectedServicePort(conn)
                 // 已知的韌體類型不覆蓋成未知（避免所有畫面停下來）
                 if let w = await conn.supportsWebStreaming { webStreaming = w }
                 online = (try? await conn.onlineChannelIds()) ?? Set(channels.map(\.id))
@@ -114,6 +119,13 @@ final class DeviceModel: Identifiable {
                 retry = min(retry * 2, 60)
             }
         }
+    }
+
+    /// 未自訂影像服務 Port 時，把 DVR 設定的 Port 存回設定（連線本身已在登入時改用）
+    private func adoptDetectedServicePort(_ conn: DVRConnection) async {
+        guard config.servicePort == nil, let d = await conn.detectedServicePort, d != 6036, conn === connection else { return }
+        config.servicePort = d
+        onConfigChanged?()
     }
 
     static func describe(_ e: Error) -> String {

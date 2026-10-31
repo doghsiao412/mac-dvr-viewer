@@ -133,6 +133,8 @@ Swift App ── HTTP POST /<指令> (XML) ────────────�
 * App 處理：以 `HEAD /js/lib/websocket.cmd.js`（404/200）判斷，不支援時顯示說明、不重試連線
 * ✅ 已實作 6036 私有協定（見 §0.4），即時與回放皆可用
 * 外網對應更正：**8082 DVR → 外網 6036**（softwareVer 00060301 = 1.3.6），**8083 DVR → 外網 6033**
+* ✅ 2026-11-01 `queryUPnPCfg`（唯讀）確認：**6033 是 8083 DVR 本身的 SERVICE Port**（`localPort`=6033，`externalPort`=6033；HTTP 也是 local 8083），不是路由器把 6036 轉成 6033。8082 DVR 為 HTTP 8082／SERVICE 6036。兩台 UPnP 皆關閉（`switch`=false，status `ineffective`），路由器以同號轉發。
+  → 影像服務 Port 可在登入後由 `queryUPnPCfg` 的 `portType=SERVICE` `localPort` 取得（前提：路由器同號轉發）
 
 ## 0.4 TVT NVMS-9000 私有協定（SERVICE Port 6036）— ✅ 實體驗證（2026-10-31）
 

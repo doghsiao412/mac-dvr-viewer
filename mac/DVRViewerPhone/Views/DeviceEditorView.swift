@@ -42,7 +42,7 @@ struct DeviceEditorView: View {
                 } header: {
                     Text("DVR 位址")
                 } footer: {
-                    Text("Port 填 DVR 網頁的連接埠。「影像服務 Port」用於同時看超過 6 路即時影像；同一個外網 IP 後面有多台 DVR 時，每台的影像服務 Port 不同（例如 6036、6033），請依路由器的轉發設定填寫。填錯時畫面會顯示「影像服務 Port 設定錯誤」。")
+                    Text("Port 填 DVR 網頁的連接埠。「影像服務 Port」用於同時看超過 6 路即時影像；保持 6036 時，連線成功後會自動帶入 DVR 自己設定的 Port（DVR「網路 → 連接埠」中的伺服器 Port）。只有路由器把它轉發成不同號碼時，才需要手動填外部 Port；填錯時畫面會顯示「影像服務 Port 設定錯誤」。")
                 }
                 Section {
                     TextField("帳號", text: $username)
@@ -119,9 +119,16 @@ struct DeviceEditorView: View {
         do {
             let chs = try await test.connect()
             let info = await test.info
+            let detected = await test.detectedServicePort
             await test.disconnect()
             resultOK = true
             result = "連線成功：\(info?.model ?? "DVR")，\(chs.count) 個頻道"
+            // 影像服務 Port 保持預設時，自動帶入 DVR 自己設定的 Port
+            if config.servicePort == nil, let d = detected, d != 6036 {
+                config.servicePort = d
+                servicePort = String(d)
+                result! += "；已自動帶入影像服務 Port \(d)"
+            }
             if isNew {
                 try store.add(config, password: pw)
             } else {

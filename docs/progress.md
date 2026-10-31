@@ -44,6 +44,7 @@
     * 首頁「編輯」後點設備沒反應：編輯模式下連結會被停用。改為編輯模式點設備打開「編輯 DVR」，並加上左側刪除鈕（模擬器確認）。
   * 之後可做：多台 DVR 的自訂 4 分割、回放 4 分割、TestFlight 發佈（需付費 Apple Developer Program）。
 
+* **1.2 已發佈（build 18）— 影像服務 Port 自動帶入**：登入後以 `queryUPnPCfg` 讀取 DVR 自己設定的 SERVICE Port；設定為預設（nil＝6036）時連線直接改用並存回設定，設備編輯畫面「測試並儲存」也會自動帶入。已自訂的 Port 不覆蓋（路由器非同號轉發時仍可手動填）。
 * **1.1 已發佈（build 17）**：回放頁「事件」清單（移動偵測等，來源為錄影區段的非排程類型＋有權限時的系統日誌）；時間軸標記下載範圍（I／O、Shift＋拖曳），「下載」帶入精確到秒的範圍；單格回放介面不遮畫面、控制列播放鍵置中。dvrcli `events` 已對實體 DVR 驗證；App 介面使用者已確認；系統日誌合併未驗證。
 
 * ~~appcast 改放 GitHub Releases 附件~~：✅ 0.8 完成（SUFeedURL＝releases/latest/download/appcast.xml；repo 根目錄 appcast.xml 仍需更新給 0.7.2 以前的版本）。

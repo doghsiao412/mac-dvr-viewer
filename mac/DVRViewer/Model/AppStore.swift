@@ -152,7 +152,7 @@ final class AppStore {
     init() {
         Notifier.shared.activate()
         defer { sync.attach(self) }
-        devices = DevicePersistence.load().map(DeviceModel.init)
+        devices = DevicePersistence.load().map { makeModel($0) }
         loadUI()
         devices.forEach { $0.start() }
     }
@@ -163,12 +163,19 @@ final class AppStore {
 
     func add(_ config: DeviceConfig, password: String) throws {
         try KeychainStore.setPassword(password, for: config.id)
-        let m = DeviceModel(config: config)
+        let m = makeModel(config)
         devices.append(m)
         persistDevices()
         m.start()
         // 第一台設備：自動把前幾個頻道放進 Live 版面
         if slots.allSatisfy({ $0 == nil }) { autoFillSlots(from: m) }
+    }
+
+    /// 建立設備模型並接上自動帶入設定的存檔
+    private func makeModel(_ c: DeviceConfig) -> DeviceModel {
+        let m = DeviceModel(config: c)
+        m.onConfigChanged = { [weak self] in self?.persistDevices() }
+        return m
     }
 
     func update(_ config: DeviceConfig, password: String?) throws {
@@ -213,7 +220,7 @@ final class AppStore {
                 list.append(m)
             } else {
                 // 其他 Mac 新增的 DVR：這台沒有密碼，需在「編輯…」輸入一次
-                let m = DeviceModel(config: c)
+                let m = makeModel(c)
                 list.append(m)
                 m.start()
             }

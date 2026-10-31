@@ -114,6 +114,24 @@ public actor NVMSClient {
         try await call("queryBasicCfg").flatContent()
     }
 
+    /// DVR 自己設定的影像服務（SERVICE，私有協定）Port，取自 `queryUPnPCfg`。
+    /// UPnP 開啟且對應成功時用路由器對外的 Port，否則用 DVR 本機的 Port（路由器通常同號轉發）。
+    public func servicePortSetting() async throws -> Int? {
+        let root = try await call("queryUPnPCfg")
+        return Self.servicePort(fromUPnP: root)
+    }
+
+    static func servicePort(fromUPnP root: DVRXMLElement) -> Int? {
+        let upnpOn = root.text("content/switch") == "true"
+        guard let item = root.elements(forPath: "content/ports/item").first(where: { $0.text("portType") == "SERVICE" })
+        else { return nil }
+        let local = item.text("localPort").flatMap { Int($0) }
+        let external = item.text("externalPort").flatMap { Int($0) }
+        let valid: (Int?) -> Int? = { p in p.flatMap { (1...65535).contains($0) ? $0 : nil } }
+        if upnpOn, item.text("status") == "effective", let e = valid(external) { return e }
+        return valid(local) ?? valid(external)
+    }
+
     public func timeConfig() async throws -> [String: String] {
         try await call("queryTimeCfg").flatContent()
     }
