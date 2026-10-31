@@ -23,20 +23,7 @@ struct PlaybackView: View {
     private struct StartKey: Equatable { let grid: [CameraRef?]; let day: Date }
 
     var body: some View {
-        // Liquid Glass：影像滿版，上方與下方為浮動玻璃面板
-        video
-            .overlay(alignment: .top) {
-                header
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                    .glassEffect(.regular, in: .capsule)
-                    .padding(.top, 12).padding(.horizontal, 16)
-            }
-            .overlay(alignment: .bottom) {
-                controls
-                    .glassEffect(.regular, in: .rect(cornerRadius: 24))
-                    .padding(.horizontal, 16).padding(.bottom, 16)
-            }
-            .background(Color.black)
+        layoutBody
         .task(id: QueryKey(ref: store.playbackRef, day: day,
                            conn: store.playbackRef.flatMap { store.device($0.deviceID) }.map { ObjectIdentifier($0.connection) },
                            grid: store.playbackGrid)) {
@@ -51,6 +38,38 @@ struct PlaybackView: View {
                             suggestedStart: controller.currentTime ?? ranges.first?.start ?? day,
                             ranges: ranges)
             }
+        }
+    }
+
+    /// 1 分割：影像滿版，上下為浮動玻璃面板。
+    /// 4 分割：標題列與時間軸放在畫面上下方，不遮住任何一格。
+    @ViewBuilder private var layoutBody: some View {
+        if store.playbackLayout == 1 {
+            video
+                .overlay(alignment: .top) {
+                    header
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.top, 12).padding(.horizontal, 16)
+                }
+                .overlay(alignment: .bottom) {
+                    controls
+                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                        .padding(.horizontal, 16).padding(.bottom, 16)
+                }
+                .background(Color.black)
+        } else {
+            VStack(spacing: 8) {
+                header
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .glassEffect(.regular, in: .capsule)
+                    .padding(.horizontal, 16).padding(.top, 8)
+                video
+                controls
+                    .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                    .padding(.horizontal, 16).padding(.bottom, 12)
+            }
+            .background(Color.black)
         }
     }
 

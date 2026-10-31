@@ -4,12 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.9</title>
-      <pubDate>Sat, 31 Oct 2026 06:22:36 GMT</pubDate>
-      <sparkle:version>14</sparkle:version>
-      <sparkle:shortVersionString>0.9</sparkle:shortVersionString>
+      <title>DVR Viewer 0.9.1</title>
+      <pubDate>Sat, 31 Oct 2026 06:29:02 GMT</pubDate>
+      <sparkle:version>15</sparkle:version>
+      <sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.9
+      <description sparkle:format="markdown"><![CDATA[v0.9.1
+
+- 更新視窗改為一般視窗，更新內容以白底顯示，捲動不再卡頓。
+- 4 分割回放時，上方標題列與下方時間軸改放在畫面外，不再遮住影像。
+
+v0.9
 
 - 多路同步回放：錄影回放可切換 4 分割，所有畫面同步播放同一時間，共用時間軸、暫停、倍速與 ±10 秒。
 - 點格子選取後再點左側頻道即可放入；聲音、截圖、下載與時間軸的錄影範圍以選取的格子為準。
@@ -104,11 +109,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.9/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.9/DVR-Viewer-0.9.dmg" sparkle:edSignature="WNwAqbbwSIYOmCxywmdDC/RdbSjwS0imnmfj2WzJgeD8l/bqLGr2HuTFyRWDlmiAeUWnV7TkvWLYP9R/XLxXBg==" length="2514981" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.9.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.9.1/DVR-Viewer-0.9.1.dmg" sparkle:edSignature="SkFnh8IcWfXh/oJbb9aUwjvgRlnOEvzgPceevU+Z1NMfoshJ2cXZBfOv32ZgWdc+cgizyM7QkAYUEAnK9FqsCw==" length="2551531" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: cs7xU4EsrEdLg4W4C6IkEgFbC5zSYOjNA8g4ZDl7OWZLbOU8PpUIlv5h6yfEE57mar6SXnHz+suBbrgw/AEPBA==
-length: 7431
+edSignature: F7B18pdtYJK3Zd0lbi/COJ+g0YjsRY+Ic7s10BaZtaiBvjdNbKjANj6wjsrZhW7YuGp381zwhCOXxpcKLZeiAA==
+length: 7635
 -->
