@@ -24,6 +24,8 @@ struct PlaybackView: View {
     /// 時間軸上標記的下載範圍（起點／終點）
     @State private var markIn: Date?
     @State private var markOut: Date?
+    /// 拖曳頻道經過的格子（4 分割為格子序號，1 分割為 0）
+    @State private var dropTarget: Int?
 
     private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16]
 
@@ -117,10 +119,17 @@ struct PlaybackView: View {
             VideoSurface(renderer: controller.renderer, aspect: aspect)
                 .background(Color.black)
                 .overlay { videoStatus }
+                .overlay { Rectangle().strokeBorder(dropTarget == 0 ? Color.accentColor : .clear, lineWidth: 2) }
                 .contextMenu {
                     Picker("畫面比例", selection: $aspect) { ForEach(VideoAspect.allCases) { Text($0.title).tag($0) } }
                     Button("截圖") { snapshot() }
                 }
+                // 從左側拖曳頻道進來：換成該頻道
+                .dropDestination(for: String.self) { items, _ in
+                    guard let t = items.first, let r = CameraRef(token: t) else { return false }
+                    store.showInPlayback(r)
+                    return true
+                } isTargeted: { dropTarget = $0 ? 0 : (dropTarget == 0 ? nil : dropTarget) }
         } else {
             // 4 分割同步回放：點格子選取（時間軸、聲音、截圖以選取的格子為準）
             GeometryReader { geo in
@@ -157,7 +166,7 @@ struct PlaybackView: View {
             } else {
                 VStack(spacing: 6) {
                     Image(systemName: "plus.viewfinder").font(.title2)
-                    Text("選取此格後，點選左側頻道").font(.caption)
+                    Text("點選左側頻道或拖曳到這裡").font(.caption)
                 }
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -165,10 +174,20 @@ struct PlaybackView: View {
             }
         }
         .overlay {
-            Rectangle().strokeBorder(store.playbackFocus == i ? Color.accentColor : .clear, lineWidth: 2)
+            Rectangle().strokeBorder(dropTarget == i ? Color.accentColor
+                                     : (store.playbackFocus == i ? Color.accentColor.opacity(0.8) : .clear), lineWidth: 2)
         }
         .contentShape(Rectangle())
         .onTapGesture { store.focusPlayback(i) }
+        // 拖曳左側頻道或其他格子到這一格（已在別格時對調）
+        .draggableIf(ref?.token)
+        .dropDestination(for: String.self) { items, _ in
+            guard let t = items.first, let r = CameraRef(token: t) else { return false }
+            store.assignPlayback(r, to: i)
+            return true
+        } isTargeted: { on in
+            if on { dropTarget = i } else if dropTarget == i { dropTarget = nil }
+        }
         .contextMenu {
             if ref != nil {
                 Button("截圖") { store.focusPlayback(i); snapshot() }
@@ -571,5 +590,12 @@ struct PlaybackView: View {
         guard let ref = store.playbackRef else { return }
         store.saveSnapshot(controller.renderer.lastPixelBuffer, name: store.name(of: ref) + "-回放",
                            time: controller.renderer.lastTime)
+    }
+}
+
+private extension View {
+    /// 有內容時才可拖曳（空格不能拖）
+    @ViewBuilder func draggableIf(_ token: String?) -> some View {
+        if let token { draggable(token) } else { self }
     }
 }

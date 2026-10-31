@@ -4,12 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.2</title>
-      <pubDate>Sat, 31 Oct 2026 16:56:12 GMT</pubDate>
-      <sparkle:version>18</sparkle:version>
-      <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+      <title>DVR Viewer 1.3</title>
+      <pubDate>Sat, 31 Oct 2026 17:04:32 GMT</pubDate>
+      <sparkle:version>19</sparkle:version>
+      <sparkle:shortVersionString>1.3</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.2
+      <description sparkle:format="markdown"><![CDATA[v1.3
+
+- 錄影回放支援拖放攝影機：4 分割時把左側頻道拖到任一格即可放入；已在別格的攝影機會互換位置，格子之間也能直接拖曳互換。
+- 單格回放時，把頻道拖進畫面就會切換成該攝影機。
+
+v1.2
 
 - 影像服務 Port 自動帶入：登入 DVR 後會讀取 DVR 自己設定的影像服務 Port，不用再手動查。同一個外網 IP 後面有多台 DVR 時，超過 6 路的即時影像也能連到正確的設備。
 - 加入或編輯 DVR 時按「測試並加入／儲存」，連線成功會自動填入影像服務 Port。已手動填寫的 Port 不會被覆蓋。
@@ -126,11 +131,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.2/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.2/DVR-Viewer-1.2.dmg" sparkle:edSignature="Gy7KCtl7ChM7uLbrh5Mnk9eh5QTKBIIGCt9WqveMok7c1BIM35tPYVNzniMogmwQKlWFFVTJw2bAjopCCSbjBw==" length="2697636" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.3/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.3/DVR-Viewer-1.3.dmg" sparkle:edSignature="npZkp1XJ5iGACZpyr9H8c6kVSEsn+IodhPHQCqaISR2XSozRv+Qjdj0XM56013IO1F1sdAuFketainsUmjBeAg==" length="2710129" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 7eEfJ3kStkv6k8egP44WNCd5heXggoi8Vbt9orOOjyAjjLQ4l/6Cjq1G1ZHCbe94BNN6DL+9OhHOLcWtqTgoDw==
-length: 8739
+edSignature: ofPxlMRm+93pXrgD6LtjHun/no2ENbEaaXwTHYW04SZQIb+8w/JQWP2zpZkK5uzIE+EA15M2ERaNyltfoE6hDQ==
+length: 8994
 -->

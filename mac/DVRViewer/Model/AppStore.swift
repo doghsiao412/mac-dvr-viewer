@@ -105,6 +105,17 @@ final class AppStore {
         playbackRef = ref
     }
 
+    /// 回放 4 分割：把頻道拖到某一格（已在別格時兩格對調）
+    func assignPlayback(_ ref: CameraRef, to i: Int) {
+        guard playbackSlots.indices.contains(i) else { return }
+        if let j = playbackSlots.firstIndex(of: ref), j != i {
+            playbackSlots.swapAt(i, j)
+        } else {
+            playbackSlots[i] = ref
+        }
+        focusPlayback(i)
+    }
+
     func focusPlayback(_ i: Int) {
         guard playbackSlots.indices.contains(i) else { return }
         playbackFocus = i
