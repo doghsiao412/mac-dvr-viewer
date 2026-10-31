@@ -138,7 +138,7 @@ struct LiveSlotView: View {
             ForEach(VideoAspect.allCases) { Text($0.title).tag($0) }
         }
         Divider()
-        Button("回放此頻道錄影") { store.playbackRef = ref; store.mode = .playback }
+        Button("回放此頻道錄影") { store.mode = .playback; store.showInPlayback(ref) }
         if store.isCustomLive {
             Button("從畫面移除") { store.clear(slot: slot) }
                 .keyboardShortcut(.delete, modifiers: [])

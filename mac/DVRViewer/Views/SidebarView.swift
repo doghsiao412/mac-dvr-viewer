@@ -103,7 +103,7 @@ struct SidebarView: View {
     private func channelRow(dev: DeviceModel, ch: DVRChannel) -> some View {
         let ref = CameraRef(deviceID: dev.id, channelID: ch.id)
         let online = dev.isOnline(ch.id)
-        let selected = store.mode == .playback ? store.playbackRef == ref
+        let selected = store.mode == .playback ? store.playbackGrid.contains(ref)
             : store.gridSlots.prefix(store.gridLayout).contains(ref)
         // 不用 Button：List 中的 Button 會吃掉滑鼠拖曳，無法拖到即時畫面
         HStack {
@@ -122,7 +122,7 @@ struct SidebarView: View {
         .onTapGesture {
             switch store.mode {
             case .live: store.showInLive(ref)
-            case .playback: if store.playbackRef != ref { store.playbackRef = ref }
+            case .playback: store.showInPlayback(ref)
             }
         }
         // 雙擊重新命名（單擊照常立即生效，不會被延遲）
@@ -139,7 +139,7 @@ struct SidebarView: View {
         }
         .contextMenu {
             Button("在即時畫面顯示") { store.mode = .live; store.showInLive(ref) }
-            Button("回放錄影") { store.mode = .playback; store.playbackRef = ref }
+            Button("回放錄影") { store.mode = .playback; store.showInPlayback(ref) }
             Button("在新視窗開啟") { openWindow(id: "camera", value: ref) }
             Divider()
             Button("重新命名…") { store.renaming = ref }

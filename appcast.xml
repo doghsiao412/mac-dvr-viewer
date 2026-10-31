@@ -4,12 +4,18 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.8.1</title>
-      <pubDate>Sat, 31 Oct 2026 04:56:01 GMT</pubDate>
-      <sparkle:version>13</sparkle:version>
-      <sparkle:shortVersionString>0.8.1</sparkle:shortVersionString>
+      <title>DVR Viewer 0.9</title>
+      <pubDate>Sat, 31 Oct 2026 06:22:36 GMT</pubDate>
+      <sparkle:version>14</sparkle:version>
+      <sparkle:shortVersionString>0.9</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.8.1
+      <description sparkle:format="markdown"><![CDATA[v0.9
+
+- 多路同步回放：錄影回放可切換 4 分割，所有畫面同步播放同一時間，共用時間軸、暫停、倍速與 ±10 秒。
+- 點格子選取後再點左側頻道即可放入；聲音、截圖、下載與時間軸的錄影範圍以選取的格子為準。
+- 回放時切換 DVR，4 格會一起換成另一台的相同頻道。
+
+v0.8.1
 
 - 更新視窗列出完整的歷代更新紀錄（可捲動）。
 - 尚未加入 DVR 時，可直接點「已在其他裝置設定過？點我設定同步」前往同步設定。
@@ -98,11 +104,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.8.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.8.1/DVR-Viewer-0.8.1.dmg" sparkle:edSignature="PiUhJffY6KnjAuKRgBlc74Ioxmv2t1+M/HF7vxUjAQPxPnrMlADciXI0PeASlqJ1d8Jct+PXumyDtAznA5CaBw==" length="2441475" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.9/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.9/DVR-Viewer-0.9.dmg" sparkle:edSignature="WNwAqbbwSIYOmCxywmdDC/RdbSjwS0imnmfj2WzJgeD8l/bqLGr2HuTFyRWDlmiAeUWnV7TkvWLYP9R/XLxXBg==" length="2514981" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 8smonDE8/PAGuDE6NRycQS33NZuGVUMqbNAi5hu+Wj2UArnuhoegSoLWH1Vs1iNAKck7oIEKMQ8834nzE/VVBQ==
-length: 7086
+edSignature: cs7xU4EsrEdLg4W4C6IkEgFbC5zSYOjNA8g4ZDl7OWZLbOU8PpUIlv5h6yfEE57mar6SXnHz+suBbrgw/AEPBA==
+length: 7431
 -->

@@ -3,7 +3,9 @@ import SwiftUI
 
 struct PlaybackView: View {
     @Environment(AppStore.self) private var store
-    @State private var controller = PlaybackController()
+    @State private var controller = MultiPlaybackController()
+    /// 上次開始播放的格子組合與日期：只換選取的格子時不重新播放
+    @State private var lastStart: StartKey?
     @State private var day = Calendar.current.startOfDay(for: Date())
     @State private var ranges: [DVRConnection.RecordRange] = []
     @State private var loadingRanges = false
@@ -17,7 +19,8 @@ struct PlaybackView: View {
 
     private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16]
 
-    private struct QueryKey: Hashable { let ref: CameraRef?; let day: Date; let conn: ObjectIdentifier? }
+    private struct QueryKey: Hashable { let ref: CameraRef?; let day: Date; let conn: ObjectIdentifier?; let grid: [CameraRef?] }
+    private struct StartKey: Equatable { let grid: [CameraRef?]; let day: Date }
 
     var body: some View {
         // Liquid Glass：影像滿版，上方與下方為浮動玻璃面板
@@ -35,9 +38,11 @@ struct PlaybackView: View {
             }
             .background(Color.black)
         .task(id: QueryKey(ref: store.playbackRef, day: day,
-                           conn: store.playbackRef.flatMap { store.device($0.deviceID) }.map { ObjectIdentifier($0.connection) })) {
+                           conn: store.playbackRef.flatMap { store.device($0.deviceID) }.map { ObjectIdentifier($0.connection) },
+                           grid: store.playbackGrid)) {
             await loadRanges()
         }
+        .onChange(of: store.playbackFocus, initial: true) { _, i in controller.setFocus(store.playbackLayout == 1 ? 0 : i) }
         .onDisappear { controller.stop() }
         .onChange(of: store.volume, initial: true) { _, v in controller.setVolume(v) }
         .sheet(isPresented: $showExport) {
@@ -81,14 +86,69 @@ struct PlaybackView: View {
 
     // MARK: - 影像
 
-    private var video: some View {
-        VideoSurface(renderer: controller.renderer, aspect: aspect)
+    @ViewBuilder private var video: some View {
+        if store.playbackLayout == 1 {
+            VideoSurface(renderer: controller.renderer, aspect: aspect)
+                .background(Color.black)
+                .overlay { videoStatus }
+                .contextMenu {
+                    Picker("畫面比例", selection: $aspect) { ForEach(VideoAspect.allCases) { Text($0.title).tag($0) } }
+                    Button("截圖") { snapshot() }
+                }
+        } else {
+            // 4 分割同步回放：點格子選取（時間軸、聲音、截圖以選取的格子為準）
+            GeometryReader { geo in
+                let w = (geo.size.width - 2) / 2, h = (geo.size.height - 2) / 2
+                Grid(horizontalSpacing: 2, verticalSpacing: 2) {
+                    ForEach(0..<2, id: \.self) { r in
+                        GridRow {
+                            ForEach(0..<2, id: \.self) { c in
+                                playbackTile(r * 2 + c).frame(width: w, height: h)
+                            }
+                        }
+                    }
+                }
+            }
             .background(Color.black)
             .overlay { videoStatus }
-            .contextMenu {
-                Picker("畫面比例", selection: $aspect) { ForEach(VideoAspect.allCases) { Text($0.title).tag($0) } }
-                Button("截圖") { snapshot() }
+        }
+    }
+
+    private func playbackTile(_ i: Int) -> some View {
+        let ref = store.playbackSlots[i]
+        let sub = controller.subs[i]
+        return ZStack {
+            if let ref {
+                VideoSurface(renderer: sub.renderer, aspect: aspect)
+                    .overlay(alignment: .bottomLeading) {
+                        Text(store.name(of: ref)).font(.caption).fontWeight(.medium)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .glassEffect(.regular, in: .capsule).padding(6)
+                    }
+                    .overlay {
+                        if sub.phase == .loading { ProgressView().controlSize(.small).padding(10).glassEffect(.regular, in: .circle) }
+                    }
+            } else {
+                VStack(spacing: 6) {
+                    Image(systemName: "plus.viewfinder").font(.title2)
+                    Text("選取此格後，點選左側頻道").font(.caption)
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(white: 0.08))
             }
+        }
+        .overlay {
+            Rectangle().strokeBorder(store.playbackFocus == i ? Color.accentColor : .clear, lineWidth: 2)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { store.focusPlayback(i) }
+        .contextMenu {
+            if ref != nil {
+                Button("截圖") { store.focusPlayback(i); snapshot() }
+                Button("從畫面移除") { store.playbackSlots[i] = nil }
+            }
+        }
     }
 
     @ViewBuilder private var videoStatus: some View {
@@ -102,7 +162,7 @@ struct PlaybackView: View {
             message("查詢錄影失敗", e, "exclamationmark.triangle")
         } else if ranges.isEmpty {
             noRecordingView
-        } else {
+        } else if store.playbackLayout == 1 {
             switch controller.phase {
             case .loading: ProgressView().padding(14).glassEffect(.regular, in: .circle)
             case .ended: message("播放結束", "點選時間軸繼續播放其他時段", "stop.circle")
@@ -284,7 +344,12 @@ struct PlaybackView: View {
     }
 
     private func loadRanges() async {
-        controller.stop()
+        let key = StartKey(grid: store.playbackGrid, day: day)
+        // 只換選取的格子（同一組頻道、同一天）：重新查錄影範圍，不重新播放
+        let restart = key != lastStart
+        // 同一天內換格子裡的頻道：從目前播放的時間接著播
+        let resumeAt = restart && lastStart?.day == day ? controller.currentTime : nil
+        if restart { controller.stop() }
         ranges = []
         rangeError = nil
         nearby = (nil, nil)
@@ -298,6 +363,9 @@ struct PlaybackView: View {
             if r.isEmpty {
                 nearby = (try? await dev.connection.nearestRecordingDays(channelId: ref.channelID, around: day)) ?? (nil, nil)
             }
+            guard restart else { return }
+            lastStart = key
+            if let resumeAt { startOrSeek(resumeAt); return }
             // 自動從當日第一段錄影開始（今天則從 10 分鐘前開始）
             if let first = r.first {
                 var start = first.start
@@ -312,14 +380,19 @@ struct PlaybackView: View {
     }
 
     private func startOrSeek(_ t: Date, reopen: Bool = false) {
-        guard let ref = store.playbackRef, let dev = store.device(ref.deviceID) else { return }
         // 點到沒有錄影的空白處：跳到下一段錄影的開頭
         var target = t
         if !ranges.contains(where: { $0.start <= t && t < $0.end }), let next = ranges.first(where: { $0.start > t }) {
             target = next.start
         }
         if reopen { controller.stop() }
-        controller.open(connection: dev.connection, channelID: ref.channelID, mainStream: mainStream, at: target)
+        let sources = store.playbackGrid.map { r -> (conn: DVRConnection, channelID: String)? in
+            guard let r, let dev = store.device(r.deviceID) else { return nil }
+            return (dev.connection, r.channelID)
+        }
+        guard sources.contains(where: { $0 != nil }) else { return }
+        lastStart = StartKey(grid: store.playbackGrid, day: day)
+        controller.open(sources, focus: store.playbackLayout == 1 ? 0 : store.playbackFocus, mainStream: mainStream, at: target)
     }
 
     private func togglePlay() {

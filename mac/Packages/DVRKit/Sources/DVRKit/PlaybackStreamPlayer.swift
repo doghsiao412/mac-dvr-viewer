@@ -43,6 +43,8 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
     public var onFrame: (@Sendable (CVPixelBuffer, Date) -> Void)?
     public var onState: (@Sendable (State) -> Void)?
     public var onTime: (@Sendable (Date) -> Void)?
+    /// 多路同步回放：設定後改依共用時鐘顯示（不再自行控速）
+    public var clock: PlaybackClock?
 
     public init(connection: DVRConnection, channelId: String, mainStream: Bool = false) {
         self.connection = connection
@@ -205,8 +207,18 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
                 continue
             }
 
-            // 控速
-            if anchorWall == nil || spd != anchorSpeed || frame.fileTime < anchorFT {
+            // 控速：多路同步時依共用時鐘
+            if let clock, !step {
+                var ready = false
+                while !ready {
+                    guard !Task.isCancelled, isCurrent(gen) else { return }
+                    if lock.withLock({ paused }) { try? await Task.sleep(for: .milliseconds(20)); continue }
+                    switch clock.decision(for: frame.captureTime) {
+                    case .show: ready = true
+                    case .wait(let d): try? await Task.sleep(for: min(d, .milliseconds(100)))
+                    }
+                }
+            } else if anchorWall == nil || spd != anchorSpeed || frame.fileTime < anchorFT {
                 anchorWall = .now; anchorFT = frame.fileTime; anchorSpeed = spd
             } else if let aw = anchorWall, !step {
                 let mediaSeconds = Double(frame.fileTime - anchorFT) / 10_000_000 / spd

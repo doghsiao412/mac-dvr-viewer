@@ -118,14 +118,18 @@ final class PlaybackController {
         player?.audioPlayer.volume = volume
     }
     private var key: String?
+    /// 多路同步回放的共用時鐘（單路時為 nil）
+    var clock: PlaybackClock?
 
     var isPaused: Bool { phase == .paused }
+    var isActive: Bool { player != nil }
 
     func open(connection: DVRConnection, channelID: String, mainStream: Bool, at date: Date) {
-        let k = "\(ObjectIdentifier(connection))|\(channelID)|\(mainStream)"
+        let k = "\(ObjectIdentifier(connection))|\(channelID)|\(mainStream)|\(clock.map { "\(ObjectIdentifier($0))" } ?? "-")"
         if key != k || player == nil {
             player?.stop()
             let p = PlaybackStreamPlayer(connection: connection, channelId: channelID, mainStream: mainStream)
+            p.clock = clock
             let r = renderer
             p.onFrame = { pb, t in r.enqueue(pb, time: t) }
             // 目前時間每秒更新約 10 次即可（每幀更新會讓整個回放畫面重繪）
@@ -211,5 +215,82 @@ final class UpdateGate: @unchecked Sendable {
             last = now
             return true
         }
+    }
+}
+
+/// 多路同步回放：最多 4 格共用一個時鐘與一條時間軸。
+/// 對外介面與 PlaybackController 相同；顯示狀態、聲音、截圖以「選取的格子」為準。
+@Observable
+@MainActor
+final class MultiPlaybackController {
+    let subs = (0..<4).map { _ in PlaybackController() }
+    private let clock = PlaybackClock()
+    private(set) var focus = 0
+    private var sources: [(conn: DVRConnection, channelID: String)?] = []
+    private var mainStream = true
+
+    private var focused: PlaybackController { subs[focus] }
+    private var active: [PlaybackController] { subs.indices.filter { sources.indices.contains($0) && sources[$0] != nil }.map { subs[$0] } }
+
+    var renderer: VideoRenderer { focused.renderer }
+    var phase: PlaybackController.Phase { focused.phase }
+    var currentTime: Date? { focused.currentTime ?? active.lazy.compactMap(\.currentTime).first }
+    var isPaused: Bool { focused.isPaused }
+    var speed: Double { focused.speed }
+    var audioOn: Bool { focused.audioOn }
+
+    /// 開始或跳轉：sources 依格子順序（nil＝空格）；超過 1 格時共用時鐘
+    func open(_ sources: [(conn: DVRConnection, channelID: String)?], focus: Int, mainStream: Bool, at date: Date) {
+        self.sources = sources
+        self.mainStream = mainStream
+        setFocus(focus)
+        let multi = sources.compactMap { $0 }.count > 1
+        clock.reset()
+        clock.setSpeed(focused.speed)
+        clock.resume()
+        for (i, c) in subs.enumerated() {
+            guard sources.indices.contains(i), let src = sources[i] else { c.stop(); continue }
+            c.clock = multi ? clock : nil
+            c.setSpeed(focused.speed)
+            c.open(connection: src.conn, channelID: src.channelID, mainStream: mainStream, at: date)
+        }
+    }
+
+    /// 換選取的格子：聲音跟著移過去，不重新播放
+    func setFocus(_ i: Int) {
+        guard subs.indices.contains(i), i != focus else { return }
+        let audio = focused.audioOn
+        if audio { focused.setAudio(false) }
+        focus = i
+        if audio { focused.setAudio(true) }
+    }
+
+    func togglePause() {
+        if focused.isPaused {
+            clock.resume()
+            active.filter(\.isPaused).forEach { $0.togglePause() }
+        } else {
+            clock.pause()
+            active.filter { !$0.isPaused }.forEach { $0.togglePause() }
+        }
+    }
+
+    func setSpeed(_ s: Double) {
+        clock.setSpeed(s)
+        subs.forEach { $0.setSpeed(s) }
+    }
+
+    func skip(_ seconds: TimeInterval) {
+        guard let t = currentTime else { return }
+        open(sources, focus: focus, mainStream: mainStream, at: t.addingTimeInterval(seconds))
+    }
+
+    func step() { active.forEach { $0.step() } }
+    func setAudio(_ on: Bool) { focused.setAudio(on) }
+    func setVolume(_ v: Double) { subs.forEach { $0.setVolume(v) } }
+
+    func stop() {
+        subs.forEach { $0.stop() }
+        sources = []
     }
 }

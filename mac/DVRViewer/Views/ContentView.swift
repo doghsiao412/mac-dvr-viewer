@@ -64,6 +64,16 @@ struct ContentView: View {
                 .pickerStyle(.segmented)
                 .labelStyle(.titleAndIcon)
             }
+            if store.mode == .playback {
+                ToolbarItem(placement: .primaryAction) {
+                    Picker("回放分割", selection: Binding(get: { store.playbackLayout }, set: { store.setPlaybackLayout($0) })) {
+                        Label("1", systemImage: "square").tag(1)
+                        Label("4", systemImage: "square.grid.2x2").tag(4)
+                    }
+                    .pickerStyle(.segmented)
+                    .help("同步回放分割畫面：4 分割時所有畫面同步播放同一時間")
+                }
+            }
             if store.mode == .live {
                 ToolbarItem(placement: .primaryAction) {
                     Picker("分割", selection: Binding(get: { store.gridLayout }, set: { store.setLayout($0) })) {

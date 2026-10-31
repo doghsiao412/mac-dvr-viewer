@@ -65,7 +65,51 @@ final class AppStore {
     }
 
     // Playback
+    /// 回放中「選取」的頻道（時間軸、聲音、截圖、下載以此為準）
     var playbackRef: CameraRef? { didSet { saveUI() } }
+    /// 多路同步回放：分割數（1 或 4）與各格頻道
+    var playbackLayout: Int = (UserDefaults.standard.object(forKey: "playbackLayout") as? Int) ?? 1 {
+        didSet { UserDefaults.standard.set(playbackLayout, forKey: "playbackLayout") }
+    }
+    var playbackSlots: [CameraRef?] = {
+        guard let d = UserDefaults.standard.data(forKey: "playbackSlots"),
+              let v = try? JSONDecoder().decode([CameraRef?].self, from: d), v.count == 4 else { return [nil, nil, nil, nil] }
+        return v
+    }() {
+        didSet { if let d = try? JSONEncoder().encode(playbackSlots) { UserDefaults.standard.set(d, forKey: "playbackSlots") } }
+    }
+    var playbackFocus = 0
+
+    /// 回放實際使用的格子（1 分割＝只有 playbackRef）
+    var playbackGrid: [CameraRef?] { playbackLayout == 1 ? [playbackRef] : playbackSlots }
+
+    func setPlaybackLayout(_ n: Int) {
+        guard n != playbackLayout else { return }
+        if n > 1 {
+            if playbackSlots.allSatisfy({ $0 == nil }) || !playbackSlots.contains(playbackRef) {
+                playbackSlots[0] = playbackRef
+                playbackFocus = 0
+            } else {
+                playbackFocus = playbackSlots.firstIndex(of: playbackRef) ?? 0
+            }
+        }
+        playbackLayout = n
+    }
+
+    /// 回放時點左側頻道：放到選取的格子
+    func showInPlayback(_ ref: CameraRef) {
+        if playbackLayout > 1 {
+            if let i = playbackSlots.firstIndex(of: ref) { playbackFocus = i; playbackRef = ref; return }
+            playbackSlots[playbackFocus] = ref
+        }
+        playbackRef = ref
+    }
+
+    func focusPlayback(_ i: Int) {
+        guard playbackSlots.indices.contains(i) else { return }
+        playbackFocus = i
+        if let r = playbackSlots[i] { playbackRef = r }
+    }
 
     // 偏好設定
     var useMainStreamWhenEnlarged: Bool = UserDefaults.standard.bool(forKey: "useMainStreamWhenEnlarged") {
@@ -378,6 +422,13 @@ final class AppStore {
         if mode == .playback {
             let idx = playbackRef.flatMap { r in device(r.deviceID)?.orderedChannels.firstIndex { $0.id == r.channelID } } ?? 0
             let chs = target.orderedChannels
+            if playbackLayout > 1 {
+                playbackSlots = playbackSlots.map { r in
+                    guard let r, let i = device(r.deviceID)?.orderedChannels.firstIndex(where: { $0.id == r.channelID }),
+                          chs.indices.contains(i) else { return nil }
+                    return CameraRef(deviceID: id, channelID: chs[i].id)
+                }
+            }
             if let ch = chs.indices.contains(idx) ? chs[idx] : chs.first {
                 playbackRef = CameraRef(deviceID: id, channelID: ch.id)
             } else {

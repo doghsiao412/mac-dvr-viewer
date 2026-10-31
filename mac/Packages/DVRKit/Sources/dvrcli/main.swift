@@ -814,6 +814,37 @@ func runMultiPlayer(conn: DVRConnection, channels: [DVRChannel], seconds: Int) a
     try? await Task.sleep(for: .seconds(1))
 }
 
+/// 多路同步回放：N 個 PlaybackStreamPlayer 共用時鐘，統計各路幀數與播放時間差
+func runMultiPlayback(conn: DVRConnection, channels: [DVRChannel], start: Date, seconds: Int, speed: Double) async {
+    final class Stat: @unchecked Sendable { let lock = NSLock(); var frames: [Int: Int] = [:] }
+    let st = Stat()
+    let clock = PlaybackClock()
+    clock.setSpeed(speed)
+    let players = channels.map { ch -> PlaybackStreamPlayer in
+        let n = ch.index + 1
+        let p = PlaybackStreamPlayer(connection: conn, channelId: ch.id, mainStream: true)
+        p.clock = clock
+        p.setSpeed(speed)
+        p.onFrame = { _, _ in st.lock.withLock { st.frames[n, default: 0] += 1 } }
+        return p
+    }
+    players.forEach { $0.play(from: start) }
+    let f = DateFormatter(); f.dateFormat = "HH:mm:ss.S"
+    var last: [Int: Int] = [:]
+    for t in stride(from: 5, through: seconds, by: 5) {
+        try? await Task.sleep(for: .seconds(5))
+        let fr = st.lock.withLock { st.frames }
+        let times = players.compactMap(\.time)
+        let spread = (times.max().map { mx in times.min().map { mx.timeIntervalSince($0) } ?? 0 }) ?? 0
+        let row = channels.map { c -> String in let n = c.index + 1; return "\(n):\((fr[n] ?? 0) - (last[n] ?? 0))" }.joined(separator: " ")
+        last = fr
+        print("t=\(t)s 時鐘 \(clock.now.map { f.string(from: $0) } ?? "-")  各路時間差 \(String(format: "%.2f", spread)) 秒  幀數 " + row)
+        if t == 10 { clock.pause(); players.forEach { $0.pause() }; print("   （暫停 3 秒）"); try? await Task.sleep(for: .seconds(3)); clock.resume(); players.forEach { $0.resume() } }
+    }
+    players.forEach { $0.stop() }
+    try? await Task.sleep(for: .seconds(1))
+}
+
 func dayRange(_ day: String) -> (String, String, Date)? {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
@@ -840,6 +871,19 @@ func run() async -> Int32 {
     let host = args.positional[0], user = args.positional[2], cmd = args.positional[3]
     devPort = port
     let rest = Array(args.positional.dropFirst(4))
+    if cmd == "multiplayback" {
+        // multiplayback <N> "yyyy-MM-dd HH:mm:ss" [--seconds S --speed X]
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
+        do {
+            let chls = try await conn.connect()
+            let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            guard rest.count >= 2, let start = df.date(from: rest[1]) else { print("用法：multiplayback <N> \"yyyy-MM-dd HH:mm:ss\""); return 1 }
+            await runMultiPlayback(conn: conn, channels: Array(chls.prefix(Int(rest[0]) ?? 4)), start: start,
+                                   seconds: args.int("seconds", 20), speed: Double(args.flags["speed"] ?? "1") ?? 1)
+        } catch { print("✖ \(error.localizedDescription)"); return 1 }
+        await conn.disconnect()
+        return 0
+    }
     if cmd == "multiplayer" {
         let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
         do {
