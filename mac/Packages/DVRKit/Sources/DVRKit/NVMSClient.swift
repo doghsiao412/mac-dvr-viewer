@@ -180,6 +180,29 @@ public actor NVMSClient {
         }
     }
 
+    /// 系統日誌中的警報（`queryLog`，依據網頁 System/viewLog.js）。時間為 **UTC** "yyyy-MM-dd HH:mm:ss"。
+    /// 需要帳號有「日誌」權限，否則回傳 536870953。
+    public func alarmLog(start: String, end: String, types: [String] = ["LOG_ALARM_MOTION"],
+                         pageIndex: Int = 1, pageSize: Int = 200) async throws -> (items: [AlarmLogItem], total: Int)
+    {
+        var x = "<pageIndex>\(pageIndex)</pageIndex><pageSize>\(pageSize)</pageSize>"
+        x += "<types><logType>" + types.map { "<enum>\($0)</enum>" }.joined() + "</logType></types>"
+        x += "<condition><logType type=\"list\"><itemType type=\"logType\"/>"
+        x += types.map { "<item>\(Self.cdata($0))</item>" }.joined()
+        x += "</logType><startTime>\(Self.cdata(start))</startTime><endTime>\(Self.cdata(end))</endTime></condition>"
+        let root = try await call("queryLog", body: Self.request(x))
+        let content = root.elements(forName: "content").first
+        let total = Int(content?.attribute(forName: "total")?.stringValue ?? "") ?? 0
+        let items = root.elements(forPath: "content/item").map { e in
+            AlarmLogItem(
+                type: e.text("logType") ?? "",
+                time: e.text("time") ?? "",
+                channelId: e.elements(forName: "chl").first?.attribute(forName: "id")?.stringValue,
+                triggerChannelIds: e.elements(forPath: "triggerRecChls/item").compactMap { $0.attribute(forName: "id")?.stringValue })
+        }
+        return (items, total)
+    }
+
     /// 不解析、直接回傳原始 XML（開發探索用；呼叫端負責遮蔽）
     public func raw(_ command: String, body: String? = nil) async throws -> String {
         try await call(command, body: body).xmlString
@@ -199,6 +222,13 @@ public struct RecordSegment: Sendable, Hashable {
     public let start: String
     public let end: String
     public let size: Int64?
+}
+
+public struct AlarmLogItem: Sendable, Hashable {
+    public let type: String          // LOG_ALARM_MOTION …
+    public let time: String          // UTC
+    public let channelId: String?
+    public let triggerChannelIds: [String]
 }
 
 public enum NVMSError: Error, CustomStringConvertible {

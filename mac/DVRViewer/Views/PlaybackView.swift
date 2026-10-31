@@ -16,11 +16,26 @@ struct PlaybackView: View {
     private let mainStream = true
     @State private var aspect: VideoAspect = .fit
     @State private var showExport = false
+    /// 事件清單（移動偵測等），對象為目前所有格子的攝影機
+    @State private var events: [EventListView.Item] = []
+    @State private var loadingEvents = false
+    @State private var eventLogDenied = false
+    @State private var showEvents = false
+    /// 時間軸上標記的下載範圍（起點／終點）
+    @State private var markIn: Date?
+    @State private var markOut: Date?
 
     private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16]
 
     private struct QueryKey: Hashable { let ref: CameraRef?; let day: Date; let conn: ObjectIdentifier?; let grid: [CameraRef?] }
     private struct StartKey: Equatable { let grid: [CameraRef?]; let day: Date }
+    private struct EventKey: Hashable { let grid: [CameraRef?]; let day: Date; let conns: [ObjectIdentifier] }
+
+    /// 標記的範圍（起點與終點都有時）
+    private var markedRange: ClosedRange<Date>? {
+        guard let a = markIn, let b = markOut, a != b else { return nil }
+        return min(a, b)...max(a, b)
+    }
 
     var body: some View {
         layoutBody
@@ -29,51 +44,40 @@ struct PlaybackView: View {
                            grid: store.playbackGrid)) {
             await loadRanges()
         }
+        .task(id: EventKey(grid: store.playbackGrid, day: day,
+                           conns: store.playbackGrid.compactMap { $0.flatMap { store.device($0.deviceID) }.map { ObjectIdentifier($0.connection) } })) {
+            await loadEvents()
+        }
+        .onChange(of: day) { markIn = nil; markOut = nil }
         .onChange(of: store.playbackFocus, initial: true) { _, i in controller.setFocus(store.playbackLayout == 1 ? 0 : i) }
         .onDisappear { controller.stop() }
         .onChange(of: store.volume, initial: true) { _, v in controller.setVolume(v) }
         .sheet(isPresented: $showExport) {
             if let ref = store.playbackRef {
                 ExportSheet(ref: ref,
-                            suggestedStart: controller.currentTime ?? ranges.first?.start ?? day,
+                            suggestedStart: markedRange?.lowerBound ?? controller.currentTime ?? ranges.first?.start ?? day,
+                            suggestedEnd: markedRange?.upperBound,
                             ranges: ranges)
             }
         }
     }
 
-    /// 1 分割：影像滿版，上下為浮動玻璃面板。
-    /// 4 分割：標題列與時間軸放在畫面上下方，不遮住任何一格。
-    @ViewBuilder private var layoutBody: some View {
-        if store.playbackLayout == 1 {
+    /// 標題列與時間軸放在畫面上下方，不遮住影像（1 分割、4 分割相同）。
+    private var layoutBody: some View {
+        VStack(spacing: 8) {
+            header
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .glassEffect(.regular, in: .capsule)
+                .padding(.horizontal, 16).padding(.top, 8)
             video
-                .overlay(alignment: .top) {
-                    header
-                        .padding(.horizontal, 16).padding(.vertical, 8)
-                        .glassEffect(.regular, in: .capsule)
-                        .padding(.top, 12).padding(.horizontal, 16)
-                }
-                .overlay(alignment: .bottom) {
-                    controls
-                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
-                        .padding(.horizontal, 16).padding(.bottom, 16)
-                }
-                .background(Color.black)
-        } else {
-            VStack(spacing: 8) {
-                header
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                    .glassEffect(.regular, in: .capsule)
-                    .padding(.horizontal, 16).padding(.top, 8)
-                video
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .padding(.horizontal, 16)
-                controls
-                    .glassEffect(.regular, in: .rect(cornerRadius: 24))
-                    .padding(.horizontal, 16).padding(.bottom, 12)
-            }
-            // 外框跟隨淺色／深色模式；只有影像區是黑底
-            .background(Color(nsColor: .windowBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 16)
+            controls
+                .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                .padding(.horizontal, 16).padding(.bottom, 12)
         }
+        // 外框跟隨淺色／深色模式；只有影像區是黑底
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     // MARK: - 上方：頻道與日期
@@ -244,85 +248,197 @@ struct PlaybackView: View {
 
     private var controls: some View {
         VStack(spacing: 4) {
-            RecordTimeline(day: day, ranges: ranges, current: controller.currentTime, zoom: $zoom) { t in
+            RecordTimeline(day: day, ranges: ranges, current: controller.currentTime, zoom: $zoom,
+                           markIn: markIn, markOut: markOut,
+                           markers: events.filter { $0.ref == store.playbackRef && $0.event.source == .log }.map(\.event.start),
+                           onSelect: { a, b in markIn = a; markOut = b }) { t in
                 startOrSeek(t)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
 
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 2) {
-                    if let t = controller.currentTime {
-                        Text(t, format: .dateTime.hour().minute().second())
-                            .font(.title3.monospacedDigit().weight(.semibold))
-                        Text(t, format: .dateTime.year().month().day())
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                    legend
+            // 左右兩側等寬，中間的播放鍵因此正好落在面板（與時間軸）正中央
+            HStack(spacing: 16) {
+                HStack(spacing: 14) {
+                    timeInfo
+                    Divider().frame(height: 28)
+                    playbackOptions
                 }
-                .frame(minWidth: 120, alignment: .leading)
-                Spacer()
-                Button { controller.skip(-10) } label: { Image(systemName: "gobackward.10") }
-                    .help("倒退 10 秒").keyboardShortcut(.leftArrow, modifiers: [])
-                Button { togglePlay() } label: {
-                    Image(systemName: controller.isPaused || controller.phase == .idle || controller.phase == .ended ? "play.fill" : "pause.fill")
-                        .font(.title3)
-                        .frame(width: 30, height: 30)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                transport.fixedSize()
+
+                ViewThatFits(in: .horizontal) {
+                    toolButtons(labels: true)
+                    toolButtons(labels: false)
                 }
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.circle)
-                .help("播放／暫停（空白鍵）")
-                .keyboardShortcut(.space, modifiers: [])
-                Button { controller.skip(10) } label: { Image(systemName: "goforward.10") }
-                    .help("前進 10 秒").keyboardShortcut(.rightArrow, modifiers: [])
-                Button { controller.step() } label: { Image(systemName: "forward.frame") }
-                    .help("逐格（.）").keyboardShortcut(".", modifiers: [])
-                Button { togglePlaybackAudio() } label: {
-                    Image(systemName: controller.audioOn ? "speaker.wave.2.fill" : "speaker.slash")
-                        .frame(width: 20)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            // 隱藏的快捷鍵（I／O 標記起點、終點）
+            .background {
+                Group {
+                    Button("") { setMark(in: true) }.keyboardShortcut("i", modifiers: [])
+                    Button("") { setMark(in: false) }.keyboardShortcut("o", modifiers: [])
                 }
-                .help(controller.audioOn ? "關閉聲音" : "開啟聲音（只在 1× 播放時輸出）")
-                if controller.audioOn {
-                    Slider(value: Binding(get: { store.volume }, set: { store.volume = $0 }), in: 0...1)
-                        .frame(width: 70)
-                        .help("音量")
-                }
-                Picker("倍速", selection: Binding(get: { controller.speed }, set: { controller.setSpeed($0) })) {
-                    ForEach(speeds, id: \.self) { s in Text(s == 0.5 ? "0.5×" : "\(Int(s))×").tag(s) }
-                }
-                .frame(width: 90)
-                .help("播放速度（>4× 只顯示關鍵幀）")
-                Spacer()
-                HStack(spacing: 6) {
-                    Button { zoomBy(1 / 2) } label: { Image(systemName: "minus.magnifyingglass") }
-                        .help("縮小時間軸（⌘－）")
-                        .keyboardShortcut("-", modifiers: [.command])
-                        .disabled(zoom <= RecordTimeline.zoomRange.lowerBound)
-                    Menu(RecordTimeline.spanText(zoom: zoom)) {
-                        ForEach([(1.0, "24 小時"), (2, "12 小時"), (6, "4 小時"), (24, "1 小時"), (96, "15 分鐘"), (288, "5 分鐘"), (1440, "1 分鐘")], id: \.0) { z, label in
-                            Button(label) { zoom = z }
-                        }
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .help("時間軸顯示範圍")
-                    Button { zoomBy(2) } label: { Image(systemName: "plus.magnifyingglass") }
-                        .help("放大時間軸（⌘＋）")
-                        .keyboardShortcut("=", modifiers: [.command])
-                        .disabled(zoom >= RecordTimeline.zoomRange.upperBound)
-                }
-                Button { snapshot() } label: { Label("截圖", systemImage: "camera") }
-                    .labelStyle(.titleAndIcon)
-                    .help("截圖")
-                Button { showExport = true } label: { Label("下載", systemImage: "arrow.down.circle") }
-                    .labelStyle(.titleAndIcon)
-                    .help("下載錄影（⌘D）")
-                    .keyboardShortcut("d", modifiers: [.command])
+                .opacity(0).accessibilityHidden(true)
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
             .disabled(store.playbackRef == nil || ranges.isEmpty)
+        }
+    }
+
+    /// 左側：目前時間與圖例／標記範圍
+    private var timeInfo: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let t = controller.currentTime {
+                Text(t, format: .dateTime.hour().minute().second())
+                    .font(.title3.monospacedDigit().weight(.semibold))
+                Text(t, format: .dateTime.year().month().day())
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            if markIn != nil || markOut != nil {
+                markSummary
+            } else {
+                legend
+            }
+        }
+        .frame(minWidth: 120, alignment: .leading)
+        .fixedSize()
+    }
+
+    /// 左側：逐格、聲音、倍速
+    private var playbackOptions: some View {
+        HStack(spacing: 12) {
+            Button { controller.step() } label: { Image(systemName: "forward.frame") }
+                .help("逐格（.）").keyboardShortcut(".", modifiers: [])
+            Button { togglePlaybackAudio() } label: {
+                Image(systemName: controller.audioOn ? "speaker.wave.2.fill" : "speaker.slash")
+                    .frame(width: 20)
+            }
+            .help(controller.audioOn ? "關閉聲音" : "開啟聲音（只在 1× 播放時輸出）")
+            if controller.audioOn {
+                Slider(value: Binding(get: { store.volume }, set: { store.volume = $0 }), in: 0...1)
+                    .frame(width: 70)
+                    .help("音量")
+            }
+            Menu {
+                ForEach(speeds, id: \.self) { s in
+                    Button(Self.speedText(s)) { controller.setSpeed(s) }
+                }
+            } label: {
+                Text(Self.speedText(controller.speed)).monospacedDigit()
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("播放速度（>4× 只顯示關鍵幀）")
+        }
+        .fixedSize()
+    }
+
+    private static func speedText(_ s: Double) -> String {
+        s == 0.5 ? "0.5×" : "\(Int(s))×"
+    }
+
+    /// 中間：倒退、播放、前進（左右對稱）
+    private var transport: some View {
+        HStack(spacing: 20) {
+            Button { controller.skip(-10) } label: { Image(systemName: "gobackward.10").font(.title2) }
+                .help("倒退 10 秒").keyboardShortcut(.leftArrow, modifiers: [])
+            Button { togglePlay() } label: {
+                Image(systemName: controller.isPaused || controller.phase == .idle || controller.phase == .ended ? "play.fill" : "pause.fill")
+                    .font(.title2)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.glassProminent)
+            .buttonBorderShape(.circle)
+            .help("播放／暫停（空白鍵）")
+            .keyboardShortcut(.space, modifiers: [])
+            Button { controller.skip(10) } label: { Image(systemName: "goforward.10").font(.title2) }
+                .help("前進 10 秒").keyboardShortcut(.rightArrow, modifiers: [])
+        }
+    }
+
+    /// 右側：時間軸縮放、事件、標記、截圖、下載（空間不足時只顯示圖示）
+    private func toolButtons(labels: Bool) -> some View {
+        HStack(spacing: labels ? 14 : 10) {
+            HStack(spacing: 6) {
+                Button { zoomBy(1 / 2) } label: { Image(systemName: "minus.magnifyingglass") }
+                    .help("縮小時間軸（⌘－）")
+                    .keyboardShortcut("-", modifiers: [.command])
+                    .disabled(zoom <= RecordTimeline.zoomRange.lowerBound)
+                Menu(RecordTimeline.spanText(zoom: zoom)) {
+                    ForEach([(1.0, "24 小時"), (2, "12 小時"), (6, "4 小時"), (24, "1 小時"), (96, "15 分鐘"), (288, "5 分鐘"), (1440, "1 分鐘")], id: \.0) { z, label in
+                        Button(label) { zoom = z }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("時間軸顯示範圍")
+                Button { zoomBy(2) } label: { Image(systemName: "plus.magnifyingglass") }
+                    .help("放大時間軸（⌘＋）")
+                    .keyboardShortcut("=", modifiers: [.command])
+                    .disabled(zoom >= RecordTimeline.zoomRange.upperBound)
+            }
+            Divider().frame(height: 20)
+            Button { showEvents.toggle() } label: { toolLabel("事件", "list.bullet.rectangle", labels) }
+                .help("移動偵測等事件清單（E）")
+                .keyboardShortcut("e", modifiers: [])
+                .popover(isPresented: $showEvents, arrowEdge: .top) {
+                    EventListView(items: events, loading: loadingEvents,
+                                  multiCamera: store.playbackLayout > 1,
+                                  logDenied: eventLogDenied,
+                                  name: { store.name(of: $0) },
+                                  current: controller.currentTime,
+                                  onPick: { pickEvent($0) })
+                }
+            Menu {
+                Button("設為起點（I）") { setMark(in: true) }
+                Button("設為終點（O）") { setMark(in: false) }
+                Divider()
+                Button("清除標記") { markIn = nil; markOut = nil }
+                    .disabled(markIn == nil && markOut == nil)
+            } label: {
+                toolLabel("標記", "bracket.square.left.fill", labels)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("標記下載範圍：播放到開頭按 I、到結尾按 O；或按住 Shift 在時間軸上拖曳")
+            Button { snapshot() } label: { toolLabel("截圖", "camera", labels) }
+                .help("截圖")
+            Button { showExport = true } label: { toolLabel("下載", "arrow.down.circle", labels) }
+                .help("下載錄影（⌘D）")
+                .keyboardShortcut("d", modifiers: [.command])
+        }
+        .fixedSize()
+    }
+
+    @ViewBuilder private func toolLabel(_ title: String, _ symbol: String, _ withText: Bool) -> some View {
+        if withText {
+            Label(title, systemImage: symbol).labelStyle(.titleAndIcon)
+        } else {
+            Label(title, systemImage: symbol).labelStyle(.iconOnly)
+        }
+    }
+
+    /// 標記的下載範圍
+    private var markSummary: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "bracket.square.left.fill").foregroundStyle(RecordTimeline.markColor)
+            Group {
+                if let r = markedRange {
+                    Text("\(r.lowerBound.formatted(.dateTime.hour().minute().second()))–\(r.upperBound.formatted(.dateTime.hour().minute().second()))（\(EventListView.duration(r.upperBound.timeIntervalSince(r.lowerBound)))）")
+                } else if let a = markIn {
+                    Text("起點 \(a.formatted(.dateTime.hour().minute().second()))，再按 O 設終點")
+                } else if let b = markOut {
+                    Text("終點 \(b.formatted(.dateTime.hour().minute().second()))，再按 I 設起點")
+                }
+            }
+            .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+            Button { markIn = nil; markOut = nil } label: { Image(systemName: "xmark.circle.fill") }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help("清除標記")
         }
     }
 
@@ -350,6 +466,41 @@ struct PlaybackView: View {
     }
 
     // MARK: - 動作
+
+    private func setMark(in isIn: Bool) {
+        guard let t = controller.currentTime else { return }
+        if isIn { markIn = t } else { markOut = t }
+    }
+
+    /// 查詢目前各格攝影機在這一天的事件
+    private func loadEvents() async {
+        let refs = Array(Set(store.playbackGrid.compactMap { $0 }))
+        events = []
+        guard !refs.isEmpty else { return }
+        loadingEvents = true
+        defer { loadingEvents = false }
+        var out: [EventListView.Item] = []
+        var denied = false
+        for (devID, group) in Dictionary(grouping: refs, by: \.deviceID) {
+            guard let dev = store.device(devID) else { continue }
+            let ev = await dev.connection.events(channelIds: group.map(\.channelID), day: day)
+            guard !Task.isCancelled else { return }
+            if await dev.connection.alarmLogDenied { denied = true }
+            out += ev.map { EventListView.Item(ref: CameraRef(deviceID: devID, channelID: $0.channelId), event: $0) }
+        }
+        events = out.sorted { $0.event.start < $1.event.start }
+        eventLogDenied = denied
+    }
+
+    /// 點事件：選取該攝影機的格子並跳到事件時間
+    private func pickEvent(_ item: EventListView.Item) {
+        if store.playbackLayout > 1, let i = store.playbackSlots.firstIndex(of: item.ref) {
+            store.focusPlayback(i)
+        }
+        // 事件錄影從開頭播；日誌事件（連續錄影中）提早 3 秒
+        let t = item.event.source == .log ? item.event.start.addingTimeInterval(-3) : item.event.start
+        startOrSeek(t, snap: false)
+    }
 
     private func togglePlaybackAudio() {
         controller.setAudio(!controller.audioOn)
@@ -401,10 +552,10 @@ struct PlaybackView: View {
         }
     }
 
-    private func startOrSeek(_ t: Date, reopen: Bool = false) {
+    private func startOrSeek(_ t: Date, reopen: Bool = false, snap: Bool = true) {
         // 點到沒有錄影的空白處：跳到下一段錄影的開頭
         var target = t
-        if !ranges.contains(where: { $0.start <= t && t < $0.end }), let next = ranges.first(where: { $0.start > t }) {
+        if snap, !ranges.contains(where: { $0.start <= t && t < $0.end }), let next = ranges.first(where: { $0.start > t }) {
             target = next.start
         }
         if reopen { controller.stop() }

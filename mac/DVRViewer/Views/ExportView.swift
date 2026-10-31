@@ -8,6 +8,8 @@ struct ExportSheet: View {
     @Environment(\.dismiss) private var dismiss
     let ref: CameraRef
     let suggestedStart: Date
+    /// 時間軸上標記的終點（有標記範圍時直接帶入起點與終點）
+    var suggestedEnd: Date? = nil
     let ranges: [DVRConnection.RecordRange]
 
     @State private var start = Date()
@@ -77,11 +79,19 @@ struct ExportSheet: View {
                         DatePicker("結束", selection: $end, in: start..., displayedComponents: [.date, .hourAndMinute])
                             .datePickerStyle(.field)
                     }
+                    if suggestedEnd != nil {
+                        LabeledContent("精確範圍") {
+                            Text("\(start.formatted(.dateTime.hour().minute().second())) – \(effectiveEnd.formatted(.dateTime.hour().minute().second()))")
+                                .monospacedDigit().foregroundStyle(.secondary)
+                        }
+                    }
                     LabeledContent("範圍內有錄影（\(store.name(of: ref))）") {
                         Text(recordedText).foregroundStyle(recordedSeconds > 0 ? Color.secondary : Color.orange)
                     }
                 } header: { Text("時間範圍") } footer: {
-                    Text("無錄影的空檔會自動略過；影像不轉碼（H.265/H.264），聲音轉為 AAC，存成 MP4。")
+                    Text(suggestedEnd != nil
+                         ? "已帶入時間軸標記的範圍。無錄影的空檔會自動略過；影像不轉碼（H.265/H.264），聲音轉為 AAC，存成 MP4。"
+                         : "無錄影的空檔會自動略過；影像不轉碼（H.265/H.264），聲音轉為 AAC，存成 MP4。小技巧：在時間軸按 I／O 或 Shift＋拖曳可標記範圍。")
                         .foregroundStyle(.secondary)
                 }
                 Section("輸出") {
@@ -111,8 +121,14 @@ struct ExportSheet: View {
         .frame(width: 520)
         .onAppear {
             selected = [ref.channelID]
-            start = Calendar.current.date(bySetting: .second, value: 0, of: suggestedStart) ?? suggestedStart
-            end = start.addingTimeInterval(300)
+            if let e = suggestedEnd, e > suggestedStart {
+                start = suggestedStart
+                end = e
+                custom = true
+            } else {
+                start = Calendar.current.date(bySetting: .second, value: 0, of: suggestedStart) ?? suggestedStart
+                end = start.addingTimeInterval(300)
+            }
         }
     }
 

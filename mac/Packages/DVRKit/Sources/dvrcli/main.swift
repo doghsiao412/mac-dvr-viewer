@@ -915,6 +915,34 @@ func run() async -> Int32 {
     if cmd == "export" {
         return await runExport(host: host, port: port, user: user, rest: rest, args: args)
     }
+    if cmd == "events" {
+        // events <yyyy-MM-dd> [頻道序號…]：列出移動偵測等事件（錄影區段＋系統日誌）
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: rest.first ?? "") else { print("用法：events <yyyy-MM-dd> [頻道序號…]"); return 1 }
+        let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+        do {
+            let chls = try await conn.connect()
+            let pick = rest.dropFirst().compactMap { Int($0) }.filter { $0 >= 1 && $0 <= chls.count }.map { chls[$0 - 1] }
+            let use = pick.isEmpty ? chls : pick
+            let t0 = Date()
+            let ev = await conn.events(channelIds: use.map(\.id), day: d)
+            let denied = await conn.alarmLogDenied
+            print("■ \(rest[0]) 事件 \(ev.count) 筆（\(use.count) 個頻道，\(String(format: "%.1f", Date().timeIntervalSince(t0))) 秒）；系統日誌：\(denied ? "帳號無權限，未使用" : "已查詢")")
+            let tf = DateFormatter(); tf.dateFormat = "HH:mm:ss"
+            for c in use {
+                let e = ev.filter { $0.channelId == c.id }
+                guard !e.isEmpty else { continue }
+                let byType = Dictionary(grouping: e, by: \.type).map { "\($0.key)×\($0.value.count)" }.sorted().joined(separator: " ")
+                let samples = e.prefix(3).map { x -> String in
+                    let dur = x.end.map { "（\(Int($0.timeIntervalSince(x.start))) 秒）" } ?? "（日誌）"
+                    return tf.string(from: x.start) + dur
+                }
+                print("   #\(c.index + 1) \(e.count) 筆 [\(byType)] 例：" + samples.joined(separator: " "))
+            }
+        } catch { print("✖ \(error.localizedDescription)"); return 1 }
+        await conn.disconnect()
+        return 0
+    }
     if cmd == "chcheck" {
         return await runChannelCheck(host: host, port: port, user: user, day: rest.first ?? "")
     }

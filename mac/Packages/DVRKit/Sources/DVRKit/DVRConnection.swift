@@ -186,6 +186,82 @@ public actor DVRConnection {
         }.sorted { $0.start < $1.start }
     }
 
+    // MARK: - 事件（移動偵測等）
+
+    /// 事件：移動偵測、感應器、智慧偵測、手動錄影
+    public struct RecordEvent: Sendable, Hashable, Identifiable {
+        public enum Source: Sendable, Hashable { case recording, log }
+        public let channelId: String
+        public let type: String       // MOTION / SENSOR / INTELLIGENT / MANUAL / POS
+        public let start: Date
+        public let end: Date?
+        public let source: Source
+        public var id: String { "\(channelId)|\(type)|\(start.timeIntervalSince1970)" }
+    }
+
+    /// 帳號沒有「日誌」權限（queryLog 回傳 536870953）：之後不再查詢
+    public private(set) var alarmLogDenied = false
+
+    /// 指定日期的事件。
+    /// 1. 錄影區段中非排程的類型（DVR 設定為移動偵測錄影時，每次移動都是一段）
+    /// 2. 系統日誌的移動偵測警報（帳號有日誌權限時；可補上全天排程錄影時的移動事件）
+    public func events(channelIds: [String], day: Date, timeZone: TimeZone = .current) async -> [RecordEvent] {
+        var out: [RecordEvent] = []
+        for ch in channelIds {
+            let r = (try? await recordRanges(channelId: ch, day: day, timeZone: timeZone)) ?? []
+            out += r.filter { $0.type.uppercased() != "SCHEDULE" }
+                .map { RecordEvent(channelId: ch, type: $0.type.uppercased(), start: $0.start, end: $0.end, source: .recording) }
+        }
+        out += await logEvents(channelIds: Set(channelIds), day: day, timeZone: timeZone, existing: out)
+        return out.sorted { $0.start < $1.start }
+    }
+
+    private func logEvents(channelIds: Set<String>, day: Date, timeZone: TimeZone, existing: [RecordEvent]) async -> [RecordEvent] {
+        guard !alarmLogDenied else { return [] }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let start = cal.startOfDay(for: day), end = start.addingTimeInterval(86399)
+        let utc = Self.formatter(TimeZone(identifier: "UTC")!)
+        let types = ["LOG_ALARM_MOTION", "LOG_ALARM_SENSOR", "LOG_ALARM_INTELLIGENT"]
+        var items: [AlarmLogItem] = []
+        do {
+            var page = 1
+            while page <= 10 {
+                let p = page
+                let r = try await withSession {
+                    try await $0.alarmLog(start: utc.string(from: start), end: utc.string(from: end), types: types, pageIndex: p, pageSize: 200)
+                }
+                items += r.items
+                if r.items.isEmpty || items.count >= r.total { break }
+                page += 1
+            }
+        } catch NVMSError.device(_, let code) where code == 536_870_953 {
+            alarmLogDenied = true
+            return []
+        } catch {
+            return []
+        }
+        var out: [RecordEvent] = []
+        for it in items {
+            guard let t = utc.date(from: it.time) else { continue }
+            let type: String
+            switch it.type {
+            case "LOG_ALARM_SENSOR": type = "SENSOR"
+            case "LOG_ALARM_INTELLIGENT": type = "INTELLIGENT"
+            default: type = "MOTION"
+            }
+            let chls = Set(([it.channelId].compactMap { $0 }) + it.triggerChannelIds).intersection(channelIds)
+            for ch in chls {
+                // 已有同頻道的事件錄影涵蓋這個時間：不重複列出
+                let covered = (existing + out).contains {
+                    $0.channelId == ch && $0.start.addingTimeInterval(-5) <= t && t <= ($0.end ?? $0.start).addingTimeInterval(5)
+                }
+                if !covered { out.append(RecordEvent(channelId: ch, type: type, start: t, end: nil, source: .log)) }
+            }
+        }
+        return out
+    }
+
     public func disconnect() async {
         await client.logout()
         if let p = privateClient { await p.disconnect() }

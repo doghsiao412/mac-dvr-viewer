@@ -44,6 +44,7 @@ Swift App ── HTTP POST /<指令> (XML) ────────────�
 | `queryChlsExistRec` | 有錄影的頻道 ID | ✅ 12 個 |
 | `queryDatesExistRec` | `<condition><chlId>{id}</chlId></condition>` → 有錄影日期 | ✅ 184 天 |
 | `queryChlRecLog` | 錄影區段，見下 | ✅ |
+| `queryLog` | 系統日誌（依據 `js/app/System/viewLog.js`）；警報類型 `LOG_ALARM_MOTION`／`LOG_ALARM_SENSOR`／`LOG_ALARM_INTELLIGENT`，時間為 **UTC**，回應 `content@total`、`content/item`（`logType`、`time`、`chl@id`、`triggerRecChls/item@id`），可分頁 `pageIndex`／`pageSize` | ⚠️ 需「日誌」權限，測試帳號回 536870953 |
 | `createRecBackupTask` | 由 DVR 備份到 DVR 端路徑（USB）— **不用於下載** | 未使用 |
 
 * `queryChlRecLog` 條件（時間為 **DVR 本地時間**，不轉 UTC）：

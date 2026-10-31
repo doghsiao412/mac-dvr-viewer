@@ -9,14 +9,24 @@ import SwiftUI
 /// - 觸控板左右滑動：平移，停止約 0.35 秒後跳轉
 /// - 縮放（調整精度）：觸控板捏合、滑鼠滾輪／上下滑動、外部按鈕；範圍 24 小時 → 1 分鐘
 /// - 單擊：直接跳到點擊位置的時間
+/// - 按住 Shift 拖曳：標記下載範圍（起點／終點）
 struct RecordTimeline: View {
     /// 播放位置的顏色：固定深紅（系統 .red 疊在玻璃面板上會被淡化成粉紅，白字不易閱讀）
     static let playhead = Color(red: 0.78, green: 0.08, blue: 0.10)
+    /// 下載範圍標記的顏色（避開排程藍、移動橘、播放紅）
+    static let markColor = Color(red: 0.98, green: 0.78, blue: 0.10)
 
     let day: Date                       // 當日 00:00（本地時間）
     let ranges: [DVRConnection.RecordRange]
     let current: Date?
     @Binding var zoom: Double           // 1 = 顯示 24 小時；1440 = 顯示 1 分鐘
+    /// 下載範圍標記
+    var markIn: Date? = nil
+    var markOut: Date? = nil
+    /// 事件標記（例如系統日誌的移動偵測時間）
+    var markers: [Date] = []
+    /// Shift＋拖曳選取範圍
+    var onSelect: ((Date, Date) -> Void)? = nil
     var onSeek: (Date) -> Void
 
     static let zoomRange: ClosedRange<Double> = 1...1440
@@ -25,6 +35,8 @@ struct RecordTimeline: View {
     @State private var interactiveCenter: Date?
     @State private var dragBase: Date?
     @State private var scrollSeekTask: Task<Void, Never>?
+    /// Shift 拖曳選取時，按下時的時間軸起點（拖曳中時間軸不跟著播放捲動）
+    @State private var selectStart: Date?
 
     private var span: TimeInterval { 86400 / zoom }
 
@@ -46,7 +58,7 @@ struct RecordTimeline: View {
         GeometryReader { geo in
             let w = max(geo.size.width, 1)
             let c = center
-            let start = c.addingTimeInterval(-span / 2)
+            let start = selectStart ?? c.addingTimeInterval(-span / 2)
             let secPerPt = span / Double(w)
             ZStack(alignment: .top) {
                 Canvas { ctx, size in draw(ctx, size: size, start: start) }
@@ -88,6 +100,14 @@ struct RecordTimeline: View {
                         interactiveCenter = nil
                         onSeek(t)
                     },
+                    onSelectBegan: { selectStart = start },
+                    onSelect: { x0, x1 in
+                        guard let base = selectStart else { return }
+                        let a = clamp(base.addingTimeInterval(Double(x0) * secPerPt))
+                        let b = clamp(base.addingTimeInterval(Double(x1) * secPerPt))
+                        onSelect?(min(a, b), max(a, b))
+                    },
+                    onSelectEnded: { selectStart = nil },
                     onScroll: { dx, dy, precise in handleScroll(dx: dx, dy: dy, precise: precise, secPerPt: secPerPt) },
                     onMagnify: { m in setZoom(zoom * (1 + Double(m))) }
                 )
@@ -95,7 +115,7 @@ struct RecordTimeline: View {
         }
         .frame(height: 60)
         .padding(.top, 14)  // 給時間標籤空間
-        .help("拖曳時間條選擇時間；捏合或滾輪縮放")
+        .help("拖曳時間條選擇時間；捏合或滾輪縮放；按住 Shift 拖曳標記下載範圍")
     }
 
     // MARK: - 互動
@@ -154,6 +174,31 @@ struct RecordTimeline: View {
                      with: .color(Self.color(r.type).opacity(0.8)))
         }
 
+        // 事件標記：時間條上方的小三角形
+        for d in markers {
+            let px = x(d)
+            guard px >= 0, px <= w else { continue }
+            ctx.fill(Path { p in
+                p.move(to: CGPoint(x: px - 3, y: barTop)); p.addLine(to: CGPoint(x: px + 3, y: barTop))
+                p.addLine(to: CGPoint(x: px, y: barTop + 5)); p.closeSubpath()
+            }, with: .color(.orange))
+        }
+
+        // 下載範圍標記
+        if let a0 = markIn ?? markOut {
+            let b0 = markOut ?? a0
+            let xa = x(min(a0, b0)), xb = x(max(a0, b0))
+            if xb > xa {
+                ctx.fill(Path(CGRect(x: xa, y: barTop, width: xb - xa, height: h - barTop)),
+                         with: .color(Self.markColor.opacity(0.35)))
+            }
+            for edge in [markIn, markOut].compactMap({ $0 }) {
+                let px = x(edge)
+                guard px >= -2, px <= w + 2 else { continue }
+                ctx.fill(Path(CGRect(x: px - 1, y: barTop - 2, width: 2, height: h - barTop + 2)), with: .color(Self.markColor))
+            }
+        }
+
         // 刻度：依可視範圍自動選擇間距
         let step = Self.tickStep(span: span, width: w)
         let minor = step / 5
@@ -202,6 +247,9 @@ struct TimelineEventCatcher: NSViewRepresentable {
     var onDrag: (CGFloat) -> Void
     var onDragEnded: () -> Void
     var onClick: (CGFloat) -> Void
+    var onSelectBegan: () -> Void = {}
+    var onSelect: (CGFloat, CGFloat) -> Void = { _, _ in }
+    var onSelectEnded: () -> Void = {}
     var onScroll: (CGFloat, CGFloat, Bool) -> Void
     var onMagnify: (CGFloat) -> Void
 
@@ -212,6 +260,9 @@ struct TimelineEventCatcher: NSViewRepresentable {
         v.onDrag = onDrag
         v.onDragEnded = onDragEnded
         v.onClick = onClick
+        v.onSelectBegan = onSelectBegan
+        v.onSelect = onSelect
+        v.onSelectEnded = onSelectEnded
         v.onScroll = onScroll
         v.onMagnify = onMagnify
     }
@@ -221,11 +272,16 @@ struct TimelineEventCatcher: NSViewRepresentable {
         var onDrag: (CGFloat) -> Void = { _ in }
         var onDragEnded: () -> Void = {}
         var onClick: (CGFloat) -> Void = { _ in }
+        var onSelectBegan: () -> Void = {}
+        var onSelect: (CGFloat, CGFloat) -> Void = { _, _ in }
+        var onSelectEnded: () -> Void = {}
         var onScroll: (CGFloat, CGFloat, Bool) -> Void = { _, _, _ in }
         var onMagnify: (CGFloat) -> Void = { _ in }
 
         private var downX: CGFloat = 0
         private var dragging = false
+        /// Shift＋拖曳：選取範圍
+        private var selecting = false
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -236,9 +292,15 @@ struct TimelineEventCatcher: NSViewRepresentable {
         override func mouseDown(with e: NSEvent) {
             downX = convert(e.locationInWindow, from: nil).x
             dragging = false
+            selecting = e.modifierFlags.contains(.shift)
+            if selecting { onSelectBegan() }
         }
 
         override func mouseDragged(with e: NSEvent) {
+            if selecting {
+                onSelect(downX, convert(e.locationInWindow, from: nil).x)
+                return
+            }
             let dx = convert(e.locationInWindow, from: nil).x - downX
             if !dragging, abs(dx) > 3 {
                 dragging = true
@@ -249,6 +311,11 @@ struct TimelineEventCatcher: NSViewRepresentable {
         }
 
         override func mouseUp(with e: NSEvent) {
+            if selecting {
+                selecting = false
+                onSelectEnded()
+                return
+            }
             if dragging {
                 dragging = false
                 NSCursor.pop()
