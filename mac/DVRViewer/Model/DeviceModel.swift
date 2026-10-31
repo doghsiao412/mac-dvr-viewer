@@ -30,6 +30,8 @@ final class DeviceModel: Identifiable {
     private(set) var info: DVRConnection.DeviceInfo?
     /// nil = 未知；false = 韌體不支援 WebSocket 影像串流
     private(set) var webStreaming: Bool?
+    /// 這台 Mac 的鑰匙圈沒有此 DVR 的密碼（例如從其他 Mac 同步過來）
+    private(set) var needsPassword = false
     private var loop: Task<Void, Never>?
 
     nonisolated var id: UUID { _id }
@@ -90,6 +92,7 @@ final class DeviceModel: Identifiable {
                 if let w = await conn.supportsWebStreaming { webStreaming = w }
                 online = (try? await conn.onlineChannelIds()) ?? Set(channels.map(\.id))
                 status = .online
+                needsPassword = false
                 retry = 5
                 // 保活與在線狀態：每 30 秒；韌體類型仍未知時每 5 秒再偵測
                 while !Task.isCancelled {
@@ -105,6 +108,7 @@ final class DeviceModel: Identifiable {
                 return
             } catch {
                 if Task.isCancelled { return }
+                if let k = error as? KeychainStore.KeychainError, case .notFound = k { needsPassword = true }
                 status = .error(Self.describe(error))
                 try? await Task.sleep(for: .seconds(retry))
                 retry = min(retry * 2, 60)
@@ -115,7 +119,7 @@ final class DeviceModel: Identifiable {
     static func describe(_ e: Error) -> String {
         if let n = e as? NVMSError { return n.description }
         if let k = e as? KeychainStore.KeychainError {
-            if case .notFound = k { return "這台 Mac 尚未輸入密碼：在 DVR 名稱上按右鍵 →「編輯…」輸入密碼" }
+            if case .notFound = k { return "這台 Mac 尚未輸入密碼" }
             return k.localizedDescription
         }
         return e.localizedDescription

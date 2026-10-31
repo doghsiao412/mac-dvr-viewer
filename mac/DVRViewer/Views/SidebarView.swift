@@ -12,9 +12,25 @@ struct SidebarView: View {
             ForEach(store.devices) { dev in
                 Section(isExpanded: Binding(get: { store.isExpanded(dev.id) },
                                             set: { store.setExpanded(dev.id, $0) })) {
-                    if dev.channels.isEmpty {
+                    if dev.needsPassword {
+                        // 從其他 Mac 同步過來、這台還沒有密碼：點一下直接輸入
+                        Button { editor = .edit(dev.config) } label: {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "key.fill").foregroundStyle(.orange)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("這台 Mac 尚未輸入密碼").font(.callout)
+                                    Text("點這裡輸入密碼").font(.caption).foregroundStyle(.tint)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 2)
+                    } else if dev.channels.isEmpty {
                         Text(dev.status == .online ? "沒有頻道" : dev.status.text)
                             .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)   // 長訊息換行，不截斷
                     }
                     ForEach(dev.orderedChannels) { ch in
                         channelRow(dev: dev, ch: ch)

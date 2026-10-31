@@ -69,10 +69,11 @@ final class DVRUserDriver: NSObject, SPUUserDriver {
     func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState, reply: @escaping (SPUUserUpdateChoice) -> Void) {
         userInitiated = false
         let version = appcastItem.displayVersionString
-        let notes = Self.notes(for: version, in: appcastItem.itemDescription ?? "")
+        let history = appcastItem.itemDescription ?? ""
         let alert = NSAlert()
         alert.messageText = "DVR Viewer \(version) 有新版本"
-        alert.informativeText = notes.isEmpty ? "要更新嗎？" : notes
+        alert.informativeText = "目前版本 \(Self.currentVersion)。以下是各版本的更新內容："
+        alert.accessoryView = Self.historyView(history)
         if appcastItem.isInformationOnlyUpdate {
             alert.addButton(withTitle: "好")
             present(alert) { _ in reply(.dismiss) }
@@ -89,7 +90,7 @@ final class DVRUserDriver: NSObject, SPUUserDriver {
                 reply(.install)
             case .alertSecondButtonReturn:
                 self.mode = .onQuit
-                UserDefaults.standard.set(["version": version, "notes": notes], forKey: Self.pendingKey)
+                UserDefaults.standard.set(["version": version, "notes": history], forKey: Self.pendingKey)
                 reply(.install)
             default:
                 // 略過此版本：不下載、不安裝，之後也不再自動提示（手動「檢查更新…」仍會看到）
@@ -157,6 +158,46 @@ final class DVRUserDriver: NSObject, SPUUserDriver {
         }
     }
 
+    static var currentVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+
+    /// 完整更新歷史（Markdown，「vX.Y」為版本標題）→ 可捲動的文字區塊，版本號粗體
+    static func historyView(_ text: String) -> NSView {
+        let out = NSMutableAttributedString()
+        let body = NSFont.systemFont(ofSize: 12)
+        let head = NSFont.boldSystemFont(ofSize: 13)
+        let para = NSMutableParagraphStyle()
+        para.paragraphSpacing = 3
+        let headPara = NSMutableParagraphStyle()
+        headPara.paragraphSpacingBefore = 8
+        headPara.paragraphSpacing = 3
+        for raw in text.components(separatedBy: .newlines) {
+            let t = raw.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty else { continue }
+            if t.range(of: #"^v\d+(\.\d+)*$"#, options: .regularExpression) != nil {
+                out.append(NSAttributedString(string: t + "\n", attributes: [.font: head, .foregroundColor: NSColor.labelColor, .paragraphStyle: headPara]))
+            } else {
+                let line = t.hasPrefix("- ") ? "•  " + t.dropFirst(2) : t
+                out.append(NSAttributedString(string: line + "\n", attributes: [.font: body, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: para]))
+            }
+        }
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 420, height: 240))
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .noBorder
+        scroll.drawsBackground = false
+        let tv = NSTextView(frame: scroll.bounds)
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.drawsBackground = false
+        tv.textContainerInset = NSSize(width: 2, height: 4)
+        tv.autoresizingMask = [.width]
+        tv.textContainer?.widthTracksTextView = true
+        tv.textStorage?.setAttributedString(out)
+        scroll.documentView = tv
+        return scroll
+    }
+
     /// 從 appcast 的完整更新歷史（Markdown，「vX.Y」為段落標題）取出指定版本的內容
     static func notes(for version: String, in text: String) -> String {
         var out: [String] = []
@@ -184,7 +225,8 @@ final class DVRUserDriver: NSObject, SPUUserDriver {
         let notes = p["notes"] as? String ?? ""
         let alert = NSAlert()
         alert.messageText = "已更新到 DVR Viewer \(version)"
-        alert.informativeText = notes.isEmpty ? "更新已完成。" : notes
+        alert.informativeText = notes.isEmpty ? "更新已完成。" : "以下是各版本的更新內容："
+        if !notes.isEmpty { alert.accessoryView = historyView(notes) }
         alert.addButton(withTitle: "好")
         NSApp.activate()
         alert.runModal()

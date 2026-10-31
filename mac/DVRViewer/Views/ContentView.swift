@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppStore.self) private var store
     @State private var editor: DeviceEditorTarget?
+    @Environment(\.openSettings) private var openSettings
     @State private var renameText = ""
 
     var body: some View {
@@ -19,8 +20,13 @@ struct ContentView: View {
                     } description: {
                         Text("加入 DVR 的位址、Port 與帳號後，即可觀看即時影像與錄影。")
                     } actions: {
-                        Button("加入 DVR…") { editor = .new }
-                            .buttonStyle(.glassProminent)
+                        VStack(spacing: 12) {
+                            Button("加入 DVR…") { editor = .new }
+                                .buttonStyle(.glassProminent)
+                            // 已在其他 Mac 設定過：直接到設定頁選同步資料夾
+                            Button("已在其他裝置設定過？點我設定同步") { openSettings() }
+                                .buttonStyle(.link)
+                        }
                     }
                 } else {
                     switch store.mode {
