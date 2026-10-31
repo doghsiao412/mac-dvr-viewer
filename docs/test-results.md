@@ -115,3 +115,4 @@
 | 2026-10-31 | Release 編譯 0.2（build 2），Sparkle.framework 嵌入、`codesign --verify --deep --strict` | ✅ |
 | 2026-10-31 | DMG：`hdiutil verify`、掛載後 App 版本與簽章 | ✅ |
 | 2026-10-31 | Sparkle `sign_update --verify` 驗證 DMG 的 EdDSA 簽章；`appcast.xml` 以 xmllint 檢查 | ✅ |
+| 2026-10-31 | **端對端自動更新**：假舊版（0.1.9／build 1）→「檢查更新…」→ 下載 GitHub 上的 0.2 DMG → EdDSA 驗證 → 安裝 → 重新啟動 | ✅ 使用者操作成功；更新後 App 為 0.2（build 2），主程式與 Release 位元相同、簽章完整（確認 ad-hoc 簽章下 Sparkle 可正常更新） |
