@@ -86,11 +86,22 @@ public final class AudioPlayer: @unchecked Sendable {
         let e = AVAudioEngine()
         let n = AVAudioPlayerNode()
         guard let f = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate, channels: 1, interleaved: false) else { return }
+        Self.activateAudioSession()
         e.attach(n)
         e.connect(n, to: e.mainMixerNode, format: f)
         n.volume = _volume
         do { try e.start() } catch { return }
         engine = e; node = n; format = f; sampleRate = rate; queued = 0
+    }
+
+    /// iPhone 需要先設定音訊工作階段：用 .playback，靜音開關打開時仍有聲音，並與其他 App 的聲音混音。
+    /// macOS 沒有音訊工作階段，不需要做任何事。
+    private static func activateAudioSession() {
+        #if os(iOS)
+        let s = AVAudioSession.sharedInstance()
+        try? s.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+        try? s.setActive(true)
+        #endif
     }
 
     private func detectLaw(_ d: Data) {

@@ -30,7 +30,7 @@ final class DeviceModel: Identifiable {
     private(set) var info: DVRConnection.DeviceInfo?
     /// nil = 未知；false = 韌體不支援 WebSocket 影像串流
     private(set) var webStreaming: Bool?
-    /// 這台 Mac 的鑰匙圈沒有此 DVR 的密碼（例如從其他 Mac 同步過來）
+    /// 這台裝置的鑰匙圈沒有此 DVR 的密碼（例如從其他 Mac 同步過來）
     private(set) var needsPassword = false
     private var loop: Task<Void, Never>?
 
@@ -119,7 +119,13 @@ final class DeviceModel: Identifiable {
     static func describe(_ e: Error) -> String {
         if let n = e as? NVMSError { return n.description }
         if let k = e as? KeychainStore.KeychainError {
-            if case .notFound = k { return "這台 Mac 尚未輸入密碼" }
+            if case .notFound = k {
+                #if os(macOS)
+                return "這台 Mac 尚未輸入密碼"
+                #else
+                return "這台 iPhone 尚未輸入密碼"
+                #endif
+            }
             return k.localizedDescription
         }
         return e.localizedDescription

@@ -453,17 +453,7 @@ struct PlaybackView: View {
         }
     }
 
-    static func typeName(_ t: String) -> String {
-        switch t {
-        case "SCHEDULE": return "排程"
-        case "MOTION": return "移動偵測"
-        case "SENSOR": return "感應器"
-        case "MANUAL": return "手動"
-        case "INTELLIGENT": return "智慧偵測"
-        case "POS": return "POS"
-        default: return t
-        }
-    }
+    static func typeName(_ t: String) -> String { TimelineStyle.typeName(t) }
 
     // MARK: - 動作
 
