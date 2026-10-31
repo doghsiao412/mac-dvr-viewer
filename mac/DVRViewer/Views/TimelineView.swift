@@ -10,6 +10,9 @@ import SwiftUI
 /// - 縮放（調整精度）：觸控板捏合、滑鼠滾輪／上下滑動、外部按鈕；範圍 24 小時 → 1 分鐘
 /// - 單擊：直接跳到點擊位置的時間
 struct RecordTimeline: View {
+    /// 播放位置的顏色：固定深紅（系統 .red 疊在玻璃面板上會被淡化成粉紅，白字不易閱讀）
+    static let playhead = Color(red: 0.78, green: 0.08, blue: 0.10)
+
     let day: Date                       // 當日 00:00（本地時間）
     let ranges: [DVRConnection.RecordRange]
     let current: Date?
@@ -52,8 +55,8 @@ struct RecordTimeline: View {
                 VStack(spacing: 0) {
                     Image(systemName: "arrowtriangle.down.fill")
                         .font(.system(size: 9))
-                        .foregroundStyle(.red)
-                    Rectangle().fill(.red).frame(width: 2)
+                        .foregroundStyle(Self.playhead)
+                    Rectangle().fill(Self.playhead).frame(width: 2)
                 }
                 .frame(maxHeight: .infinity)
                 .allowsHitTesting(false)
@@ -61,10 +64,11 @@ struct RecordTimeline: View {
                 // 互動時顯示目標時間
                 if interactiveCenter != nil {
                     Text(c, format: .dateTime.hour().minute().second())
-                        .font(.caption.monospacedDigit().weight(.semibold))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.red, in: RoundedRectangle(cornerRadius: 4))
+                        .font(.caption.monospacedDigit().weight(.bold))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Self.playhead, in: RoundedRectangle(cornerRadius: 5))
                         .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
                         .offset(y: -18)
                         .allowsHitTesting(false)
                 }
