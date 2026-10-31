@@ -90,7 +90,7 @@ struct LiveSlotView: View {
         ZStack {
             if let ref, let dev = store.device(ref.deviceID) {
                 VideoTile(ref: ref, device: dev, mainStream: store.wantsMainStream(slot: slot),
-                          aspect: store.slotAspect[slot] ?? .fit)
+                          aspect: store.aspect(slot: slot))
                     .contextMenu { menu(ref) }
             } else {
                 VStack(spacing: 6) {
@@ -126,13 +126,15 @@ struct LiveSlotView: View {
         Button("在新視窗開啟") { openWindow(id: "camera", value: ref) }
         Button("重新命名…") { store.renaming = ref }
         Divider()
-        Picker("串流", selection: Binding(get: { store.wantsMainStream(slot: slot) },
-                                        set: { store.slotMainStream[slot] = $0 })) {
-            Text("子串流（流暢）").tag(false)
-            Text("主串流（高畫質）").tag(true)
+        if store.advancedFeatures {
+            Picker("串流", selection: Binding(get: { store.wantsMainStream(slot: slot) },
+                                            set: { store.cameraMainStream[ref] = $0 })) {
+                Text("子串流（流暢）").tag(false)
+                Text("主串流（高畫質）").tag(true)
+            }
         }
-        Picker("畫面比例", selection: Binding(get: { store.slotAspect[slot] ?? .fit },
-                                          set: { store.slotAspect[slot] = $0 })) {
+        Picker("畫面比例", selection: Binding(get: { store.cameraAspect[ref] ?? .fit },
+                                          set: { store.cameraAspect[ref] = $0 })) {
             ForEach(VideoAspect.allCases) { Text($0.title).tag($0) }
         }
         Divider()

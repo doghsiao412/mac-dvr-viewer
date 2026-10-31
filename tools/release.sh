@@ -3,6 +3,8 @@
 #
 # 用法：SPARKLE_BIN=<Sparkle 發行包>/bin tools/release.sh <版本，例如 0.3> <內部版本號（必須遞增），例如 3>
 #
+# 會先做個資檢查（tools/private-patterns.txt＋通用規則），發現就中斷。
+#
 # 事前準備：
 #   1. 在 RELEASE_NOTES.md 最上方加入「v<版本>」段落（由新到舊列出每個版本的更新內容）
 #   2. Sparkle 工具：https://github.com/sparkle-project/Sparkle/releases（解壓後的 bin 資料夾）
@@ -22,6 +24,23 @@ account="local.dvrviewer.app"
 minos="26.0"
 
 head -1 RELEASE_NOTES.md | grep -qx "v$ver" || { echo "RELEASE_NOTES.md 第一行必須是 v$ver"; exit 1; }
+
+# 個資檢查：repo 是公開的，發現 IP、帳號、設備名稱、本機路徑或 Email 就中斷
+#   tools/private-patterns.txt（只在本機、不進 Git）列出自己的 IP／帳號／設備名稱
+echo "■ 個資檢查"
+leak=0
+patterns=tools/private-patterns.txt
+if [[ -f "$patterns" ]]; then
+  if git grep --untracked -I -n -E -f <(grep -v '^#' "$patterns" | grep -v '^$') -- . ':!tools/private-patterns.txt'; then leak=1; fi
+else
+  echo "⚠️ 找不到 $patterns，只做通用檢查（建議建立，列出自己的 IP、帳號、設備名稱）"
+fi
+# 通用：本機使用者路徑、Email（noreply 與圖檔 @2x 除外）
+if git grep --untracked -I -n -E '/Users/[A-Za-z]' -- . ':!tools/private-patterns.txt'; then leak=1; fi
+if git grep --untracked -I -n -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}' -- . ':!tools/private-patterns.txt' \
+     | grep -v -E 'noreply|@[0-9]+x\.'; then leak=1; fi
+(( leak )) && { echo "✖ 發現可能的個人資訊（如上），請移除後再發佈"; exit 1; }
+echo "   ✓ 未發現個人資訊"
 
 proj=mac/DVRViewer.xcodeproj/project.pbxproj
 sed -i '' -E "s/MARKETING_VERSION = [0-9.]+;/MARKETING_VERSION = $ver;/g; s/CURRENT_PROJECT_VERSION = [0-9]+;/CURRENT_PROJECT_VERSION = $build;/g" "$proj"

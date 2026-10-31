@@ -39,3 +39,6 @@ __pycache__/
 *.pyc
 
 .DS_Store
+
+# 發佈前個資檢查清單（本機）
+tools/private-patterns.txt

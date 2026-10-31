@@ -39,6 +39,7 @@ struct VideoTile: View {
         .onChange(of: audioOn, initial: true) { _, on in controller.setAudio(on) }
         .onChange(of: store.volume, initial: true) { _, v in controller.setVolume(v) }
         .onAppear {
+            controller.onLiveLimit = { [device] in store.noteLiveLimit(device.id) }
             controller.onAudioUnsupported = { [ref] in
                 if store.audioRef == ref { store.audioRef = nil }
                 store.showToast("此頻道沒有聲音")
@@ -84,7 +85,7 @@ struct VideoTile: View {
         HStack(spacing: 6) {
             Text(device.displayName(ref.channelID)).fontWeight(.medium)
             if audioOn { Image(systemName: "speaker.wave.2.fill").foregroundStyle(.yellow) }
-            if mainStream { Text("主").font(.caption2.weight(.semibold)).foregroundStyle(.tint) }
+            if mainStream && store.advancedFeatures { Text("主").font(.caption2.weight(.semibold)).foregroundStyle(.tint) }
             if let t = controller.lastFrameTime {
                 Text(t, format: .dateTime.hour().minute().second()).monospacedDigit().foregroundStyle(.secondary)
             }
@@ -167,12 +168,12 @@ struct CameraWindowView: View {
     let ref: CameraRef
     @State private var floating = false
     @State private var mainStream = false
-    @State private var aspect: VideoAspect = .fit
 
     var body: some View {
         Group {
             if let dev = store.device(ref.deviceID) {
-                VideoTile(ref: ref, device: dev, mainStream: mainStream, aspect: aspect)
+                VideoTile(ref: ref, device: dev, mainStream: store.advancedFeatures && mainStream,
+                          aspect: store.cameraAspect[ref] ?? .fit)
                     .navigationTitle(dev.displayName(ref.channelID))
             } else {
                 ContentUnavailableView("找不到設備", systemImage: "video.slash")
@@ -181,12 +182,15 @@ struct CameraWindowView: View {
         .background(WindowLevelSetter(floating: floating))
         .toolbar {
             ToolbarItemGroup {
-                Picker("串流", selection: $mainStream) {
-                    Text("子串流").tag(false)
-                    Text("主串流").tag(true)
+                if store.advancedFeatures {
+                    Picker("串流", selection: $mainStream) {
+                        Text("子串流").tag(false)
+                        Text("主串流").tag(true)
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
-                Picker("比例", selection: $aspect) {
+                Picker("比例", selection: Binding(get: { store.cameraAspect[ref] ?? .fit },
+                                                set: { store.cameraAspect[ref] = $0 })) {
                     ForEach(VideoAspect.allCases) { Text($0.title).tag($0) }
                 }
                 Toggle(isOn: $floating) { Label("置頂", systemImage: floating ? "pin.fill" : "pin") }

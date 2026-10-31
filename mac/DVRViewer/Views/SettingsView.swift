@@ -8,10 +8,15 @@ struct SettingsView: View {
         @Bindable var store = store
         TabView {
             Form {
-                Section("即時影像") {
-                    Toggle("放大單一畫面時使用主串流", isOn: $store.useMainStreamWhenEnlarged)
-                    Text("實測此類 DVR 經網際網路觀看時，主串流幀率很低（約每秒 1 張）。預設在所有畫面使用子串流（流暢），可在畫面右鍵選單個別切換。")
+                Section("進階功能") {
+                    Toggle("顯示進階功能", isOn: $store.advancedFeatures)
+                    Text("一般不需要開啟，App 會自動使用最佳設定：即時影像用流暢的子串流，回放與下載用錄影原始畫質。開啟後可在畫面右鍵選單與攝影機視窗切換主／子串流。")
                         .font(.caption).foregroundStyle(.secondary)
+                    if store.advancedFeatures {
+                        Toggle("放大單一畫面時使用主串流", isOn: $store.useMainStreamWhenEnlarged)
+                        Text("部分 DVR 經網際網路觀看時主串流幀率很低（約每秒 1 張），若放大後變卡請關閉。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Section("聲音") {
                     LabeledContent("音量") {

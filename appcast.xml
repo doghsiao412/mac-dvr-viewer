@@ -4,12 +4,18 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.6</title>
-      <pubDate>Sat, 31 Oct 2026 02:46:37 GMT</pubDate>
-      <sparkle:version>7</sparkle:version>
-      <sparkle:shortVersionString>0.6</sparkle:shortVersionString>
+      <title>DVR Viewer 0.6.1</title>
+      <pubDate>Sat, 31 Oct 2026 03:03:46 GMT</pubDate>
+      <sparkle:version>8</sparkle:version>
+      <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.6
+      <description sparkle:format="markdown"><![CDATA[v0.6.1
+
+- 簡化介面：不再顯示主／子串流，App 自動使用最佳設定（即時影像流暢、回放與下載為錄影原始畫質）；需要時可在設定開啟「顯示進階功能」。
+- 畫面比例改為跟著攝影機記住，換頁或切換 DVR 時不會套用到其他攝影機。
+- DVR 網頁連線數已滿、又無法連到影像服務 Port 時，顯示說明並可直接開啟設備設定。
+
+v0.6
 
 - 可建立多個自訂畫面：在左上角選單新增、重新命名、移除，每個畫面各自記住分割與頻道排列。
 - 新增「編輯 DVR 順序」：左上角選單最下方，拖曳或用箭頭調整，側邊欄、選單與 ⌥⌘1–9 都依此順序。
@@ -63,11 +69,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.6/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.6/DVR-Viewer-0.6.dmg" sparkle:edSignature="+MDeyqrTseavnfcwZt0U1Cg4pOSp/vmfC4THVcMzSBVM2eAGsB+WQ3utByS/NHjSTnINK0I0naXBx7HTEx9WBA==" length="2329738" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.6.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.6.1/DVR-Viewer-0.6.1.dmg" sparkle:edSignature="NbO8lrQcXKFuMp0gDRVP/aT9/Ey7ZtWx6XKehmCZp7+KBKgsLkNG4VmsLZR7FHcjj6GCdiYSBNgfWQu8QaiQBQ==" length="2345545" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: ZbhCVQF+0v8H4PDVaR7MiB02quFdg3WuA8iicEEWqSCPevbBKNZhjmHz6r//oCgupW+q/YzpHejFAYnbbh7nBQ==
-length: 4915
+edSignature: CTknN5v8cWJGPz7TpTpXdfQIYsGIkoh8jCyrozBWQVtYWfBve3GVZL759lmKZd5AhCLQ9TtwpaYHAe1VF5oTBQ==
+length: 5346
 -->

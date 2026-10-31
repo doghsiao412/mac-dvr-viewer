@@ -20,6 +20,8 @@ final class LiveTileController {
     private var wantAudio = false
     private var volume: Float = 0.8
     var onAudioUnsupported: (() -> Void)?
+    /// DVR 同時影像連線已達上限，且影像服務 Port 連不上
+    var onLiveLimit: (() -> Void)?
 
     func setAudio(_ on: Bool) {
         wantAudio = on
@@ -55,7 +57,9 @@ final class LiveTileController {
                 switch s {
                 case .connecting: self.phase = .connecting
                 case .playing: self.phase = .playing
-                case .reconnecting(let why): self.phase = .reconnecting(why)
+                case .reconnecting(let why):
+                    self.phase = .reconnecting(why)
+                    if why.contains(DVRConnection.liveLimitMessage) { self.onLiveLimit?() }
                 case .stopped: self.phase = .idle
                 }
             }

@@ -37,8 +37,32 @@ final class AppStore {
     }
     var focusedSlot: Int = 0
     var enlargedSlot: Int?
-    var slotMainStream: [Int: Bool] = [:]
-    var slotAspect: [Int: VideoAspect] = [:]
+    /// 每支攝影機的個別設定（跟著攝影機走，換頁、切 DVR、換自訂畫面都不會套到別支）
+    var cameraMainStream: [CameraRef: Bool] = AppStore.loadDict("cameraMainStream") {
+        didSet { Self.saveDict(cameraMainStream, "cameraMainStream") }
+    }
+    var cameraAspect: [CameraRef: VideoAspect] = AppStore.loadDict("cameraAspect") {
+        didSet { Self.saveDict(cameraAspect, "cameraAspect") }
+    }
+
+    private static func loadDict<V: Codable>(_ key: String) -> [CameraRef: V] {
+        guard let d = UserDefaults.standard.data(forKey: key),
+              let v = try? JSONDecoder().decode([CameraRef: V].self, from: d) else { return [:] }
+        return v
+    }
+    private static func saveDict<V: Codable>(_ v: [CameraRef: V], _ key: String) {
+        if let d = try? JSONEncoder().encode(v) { UserDefaults.standard.set(d, forKey: key) }
+    }
+
+    /// 格子目前的畫面比例
+    func aspect(slot: Int) -> VideoAspect {
+        gridSlots[slot].flatMap { cameraAspect[$0] } ?? .fit
+    }
+
+    /// 進階功能（主／子串流選擇等）。一般使用者不需要：App 依實測自動使用最佳設定
+    var advancedFeatures: Bool = UserDefaults.standard.bool(forKey: "advancedFeatures") {
+        didSet { UserDefaults.standard.set(advancedFeatures, forKey: "advancedFeatures") }
+    }
 
     // Playback
     var playbackRef: CameraRef? { didSet { saveUI() } }
@@ -132,6 +156,16 @@ final class AppStore {
         let to = devices.firstIndex(where: { $0.id == target }) ?? devices.count
         devices.insert(m, at: to)
         persistDevices()
+    }
+
+    /// 超過 DVR 同時連線上限的提示（每台設備每次開啟 App 只提示一次）
+    var liveLimitDevice: UUID?
+    private var liveLimitNotified: Set<UUID> = []
+
+    func noteLiveLimit(_ id: UUID) {
+        guard !liveLimitNotified.contains(id) else { return }
+        liveLimitNotified.insert(id)
+        liveLimitDevice = id
     }
 
     /// 「編輯順序」視窗
@@ -387,7 +421,9 @@ final class AppStore {
 
     /// 放大時是否使用主串流（實測此 DVR 主串流遠端約 1 fps，故預設使用子串流）
     func wantsMainStream(slot: Int) -> Bool {
-        if let v = slotMainStream[slot] { return v }
+        // 一般模式一律用子串流（此類 DVR 遠端看主串流約每秒 1 張）；進階功能才可切換
+        guard advancedFeatures else { return false }
+        if let r = gridSlots[slot], let v = cameraMainStream[r] { return v }
         return enlargedSlot == slot && useMainStreamWhenEnlarged
     }
 

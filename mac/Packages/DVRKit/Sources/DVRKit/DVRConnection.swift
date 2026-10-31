@@ -249,9 +249,12 @@ public actor DVRConnection {
             if let ch = channel(channelId), let ms = try? await openPrivateLiveIfAvailable(ch, mainStream: mainStream) {
                 return ms
             }
-            throw NVMSError.transport("DVR 同時影像連線已達上限，且無法連到影像服務 Port \(servicePort)（請在設備設定確認此 Port）")
+            throw NVMSError.transport("\(Self.liveLimitMessage)，且無法連到影像服務 Port \(servicePort)（請在設備設定確認此 Port）")
         }
     }
+
+    /// 超過 WebSocket 上限且私有協定連不上時的錯誤訊息開頭（App 用來顯示設定提示）
+    public static let liveLimitMessage = "DVR 同時影像連線已達上限"
 
     /// 目前開著的 WebSocket 即時串流數與偵測到的上限
     private var activeWebLive = 0
