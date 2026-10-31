@@ -18,6 +18,9 @@ struct PlaybackView: View {
     @State private var sheet: SheetKind?
     @State private var showControls = true
     @AppStorage("phone.playback.mainStream") private var mainStream = false
+    /// 已載入錄影範圍的日期（同一天重新載入時，從原本播放的時間接著播）
+    @State private var loadedDay: Date?
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.verticalSizeClass) private var vSize
 
     private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16]
@@ -97,6 +100,10 @@ struct PlaybackView: View {
         }
         .task(id: QueryKey(day: day, conn: ObjectIdentifier(device.connection), online: device.status == .online)) {
             await loadEvents()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // 切到背景：停止播放（保留目前時間），回到前景重新連線後接著播
+            if phase == .background { controller.stop() }
         }
         .onChange(of: mainStream) { _, _ in
             if let t = controller.currentTime { startOrSeek(t, reopen: true, snap: false) }
@@ -251,6 +258,7 @@ struct PlaybackView: View {
     }
 
     private func loadRanges() async {
+        let resumeAt = loadedDay == day ? controller.currentTime : nil
         controller.stop()
         ranges = []
         rangeError = nil
@@ -262,6 +270,11 @@ struct PlaybackView: View {
             let r = try await device.connection.recordRanges(channelId: channelID, day: day)
             guard !Task.isCancelled else { return }
             ranges = r
+            loadedDay = day
+            if let resumeAt, !r.isEmpty {
+                startOrSeek(resumeAt, snap: false)
+                return
+            }
             if r.isEmpty {
                 nearby = (try? await device.connection.nearestRecordingDays(channelId: channelID, around: day)) ?? (nil, nil)
                 return

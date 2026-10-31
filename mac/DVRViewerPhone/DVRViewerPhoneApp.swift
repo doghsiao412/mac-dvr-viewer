@@ -12,8 +12,11 @@ struct DVRViewerPhoneApp: App {
             DeviceListView()
                 .environment(store)
                 .onChange(of: scenePhase, initial: true) { _, phase in
-                    // 回到前景時，啟動尚未連線的設備（已在連線中的不受影響）
-                    if phase == .active { store.startAll() }
+                    switch phase {
+                    case .active: store.resumeAll()
+                    case .background: store.suspendAll()
+                    default: break   // .inactive（控制中心、來電橫幅）不中斷
+                    }
                 }
         }
     }
@@ -29,7 +32,25 @@ final class PhoneStore {
         devices = DevicePersistence.load().map(DeviceModel.init)
     }
 
-    func startAll() { devices.forEach { $0.start() } }
+    /// 切到背景時 iOS 會暫停 App、網路連線隨之失效：主動斷線，回到前景再重新登入
+    private var suspended = false
+
+    func suspendAll() {
+        guard !suspended else { return }
+        suspended = true
+        devices.forEach { $0.stop() }
+    }
+
+    /// 回到前景（或第一次啟動）：背景回來的設備重建連線，其餘啟動尚未連線的設備。
+    /// 重建連線後 `DeviceModel.connection` 會換新，畫面以它為鍵的串流會自動重新開始。
+    func resumeAll() {
+        if suspended {
+            suspended = false
+            devices.forEach { $0.reconnect() }
+        } else {
+            devices.forEach { $0.start() }
+        }
+    }
 
     func add(_ config: DeviceConfig, password: String) throws {
         try KeychainStore.setPassword(password, for: config.id)

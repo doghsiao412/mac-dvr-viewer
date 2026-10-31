@@ -41,7 +41,7 @@ struct ExportSheet: View {
                             Text("\(Int(f * 100))%・\(Self.mb(bytes))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                     } footer: {
-                        Text("下載期間請保持 App 在前景。")
+                        Text("切到其他 App 時，下載約可再繼續 30 秒；較長的下載請保持 App 在前景。")
                     }
                 case .done(let url, let summary):
                     Section {
@@ -119,11 +119,26 @@ struct ExportSheet: View {
         let dir = FileManager.default.temporaryDirectory.appending(path: "Exports", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appending(path: "\(name)_\(f.string(from: start)).mp4")
-        let conn = device.connection
+        // 用獨立連線下載：切到背景時 App 會中斷設備的主要連線，不影響這裡
+        let cfg = device.config
+        let id = device.id
+        let conn = DVRConnection(host: cfg.host, port: cfg.port, username: cfg.username,
+                                 servicePort: cfg.servicePort ?? 6036) { try KeychainStore.password(for: id) }
         let (s, e, hq, audio, ch) = (start, start.addingTimeInterval(TimeInterval(seconds)), highQuality, includeAudio, channelID)
         phase = .running(fraction: 0, bytes: 0)
         task = Task { @MainActor in
+            // 向 iOS 申請背景執行時間（通常約 30 秒），短暫切到其他 App 時下載不中斷
+            var bg = UIBackgroundTaskIdentifier.invalid
+            bg = UIApplication.shared.beginBackgroundTask(withName: "DVRExport") {
+                UIApplication.shared.endBackgroundTask(bg)
+                bg = .invalid
+            }
+            defer {
+                if bg != .invalid { UIApplication.shared.endBackgroundTask(bg) }
+                Task { await conn.disconnect() }
+            }
             do {
+                _ = try await conn.connect()
                 let r = try await RecordingExporter.export(
                     connection: conn, channelId: ch, start: s, end: e,
                     mainStream: hq, includeAudio: audio, to: url) { [gate = UpdateGate(interval: 0.25)] p in

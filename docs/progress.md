@@ -9,19 +9,24 @@
 
 ## 下一版待辦
 
-* **iPhone 版（試作中）**：計畫 ① DVRKit 支援 iOS → ② 新增 iPhone App 最小版（加入 DVR、頻道清單、單頻道即時影像）→ ③ 手機介面（4 分割、全螢幕、橫放、回放時間軸、事件、下載存到照片／檔案）→ ④ 平台差異（無 Sparkle 改 TestFlight／Xcode 安裝、Info.plist 開放 HTTP 與區域網路權限、切背景後自動重連）。
+* **iPhone 版（試作 ①–④ 完成，已在 iPhone 實機驗證）**：計畫 ① DVRKit 支援 iOS → ② 新增 iPhone App 最小版（加入 DVR、頻道清單、單頻道即時影像）→ ③ 手機介面（4 分割、全螢幕、橫放、回放時間軸、事件、下載存到照片／檔案）→ ④ 平台差異（無 Sparkle 改 TestFlight／Xcode 安裝、Info.plist 開放 HTTP 與區域網路權限、切背景後自動重連）。
   * ✅ ①（2026-10-31）：Package 加 `.iOS(.v26)`；macOS 專屬的 `XMLDocument` 改為跨平台 `DVRXMLElement`（`XMLParser`）；`AudioPlayer` 在 iOS 設定 `AVAudioSession`（.playback）。iOS 編譯成功、macOS 測試與 App 編譯通過、dvrcli 對實體 DVR 結果不變。**尚未在 iPhone 實機執行。**
   * ✅ ②（2026-10-31，**使用者已在 iPhone 實機確認即時影像**）：同一個 Xcode 專案新增 target `DVRViewerPhone`（`mac/DVRViewerPhone/`，Bundle ID `local.dvrviewer.phone`，Personal Team 自動簽章）。Mac 與 iPhone 共用的檔案移到 `mac/Shared/`（DeviceConfig、DeviceModel、KeychainStore、VideoRenderer、PlayerControllers；`VideoSurface` 以 `#if os` 分 NSView／UIView）。畫面：DVR 清單（滑動編輯／刪除）→ 加入 DVR（測試登入後才儲存）→ 頻道清單（離線頻道不可點）→ 單頻道即時影像（流暢／高畫質、聲音、直放 16:9、橫放全螢幕點一下顯示控制、觀看時不自動鎖定）。iPhone 實機編譯、簽章、安裝成功；使用者在 iPhone 信任開發者後，加入 DVR 並看到即時影像。
     * 免費 Personal Team 簽章 7 天到期，到期後需重新從 Xcode 安裝。
     * 這台 Mac 未安裝 iOS 模擬器執行環境（約 8 GB），目前直接用實機測試。
-    * App 圖示沿用 Mac 版 1024 圖（含 macOS 透明圓角邊），之後換成 iOS 專用圖示。
+    * ~~App 圖示沿用 Mac 版~~：④ 已換成 iOS 專用圖示。
   * ✅ ③（2026-10-31，**使用者已在 iPhone 實機確認全部正常**）：
     * DVR 頁改為 4 分割即時影像（左右滑換頁；只有目前頁且畫面在最上層時連線，使用子碼流）；點一下放大（單頻道頁），長按選單可進回放。單頻道頁被回放頁蓋住時停止串流。
     * 回放頁（單頻道）：時間軸手指拖曳／點一下跳轉／雙指縮放；倒退・前進 10 秒、倍速 0.5–16×、畫質、聲音；日期前後一天＋日曆；這天沒錄影時提供最近有錄影的日期；橫放全螢幕。
     * 事件清單（底部面板）：類型篩選，點一下跳到該時間。
     * 下載：選開始時間與長度（30 秒–30 分）→ `RecordingExporter` 存成 MP4（暫存資料夾）→「儲存到照片」（只要求加入權限）或分享／存到「檔案」；關閉面板時刪除暫存檔。
     * 時間軸繪製抽到 `mac/Shared/TimelineStyle.swift`，Mac 版 `RecordTimeline` 改為呼叫共用程式（Mac App 重新編譯通過，外觀邏輯未改）。
-  * 下一步：④ 平台差異（切背景後自動重連、iOS 圖示）。
+  * ✅ ④（2026-10-31，**使用者已在 iPhone 實機確認全部正常**）：
+    * 切到背景：所有設備斷線、畫面停止串流（`.inactive` 如控制中心不中斷）；回到前景：每台設備 `reconnect()` 換新連線，以連線為鍵的即時／回放畫面自動重新開始。
+    * 回放：同一天重新載入錄影範圍時，從原本播放的時間接著播（背景回來、斷線重連都適用）。
+    * 下載改用獨立連線＋`beginBackgroundTask`（約 30 秒），短暫切到其他 App 不中斷。
+    * iOS 專用圖示：依 Mac 圖示構圖與配色重畫成 1024 滿版、無透明（產生腳本未提交，若要修改可重畫）。
+  * 之後可做：多台 DVR 的自訂 4 分割、回放 4 分割、TestFlight 發佈（需付費 Apple Developer Program）。
 
 * **1.1 已發佈（build 17）**：回放頁「事件」清單（移動偵測等，來源為錄影區段的非排程類型＋有權限時的系統日誌）；時間軸標記下載範圍（I／O、Shift＋拖曳），「下載」帶入精確到秒的範圍；單格回放介面不遮畫面、控制列播放鍵置中。dvrcli `events` 已對實體 DVR 驗證；App 介面使用者已確認；系統日誌合併未驗證。
 

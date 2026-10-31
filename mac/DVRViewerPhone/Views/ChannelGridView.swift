@@ -13,6 +13,7 @@ struct ChannelGridView: View {
     let device: DeviceModel
     @State private var page = 0
     @State private var visible = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private var pages: [[DVRChannel]] {
         let chs = device.orderedChannels
@@ -26,7 +27,7 @@ struct ChannelGridView: View {
             } else {
                 TabView(selection: $page) {
                     ForEach(Array(pages.enumerated()), id: \.offset) { i, chs in
-                        GridPage(device: device, channels: chs, active: visible && page == i)
+                        GridPage(device: device, channels: chs, active: visible && page == i && scenePhase != .background)
                             .padding(.horizontal, 8)
                             .padding(.bottom, pages.count > 1 ? 36 : 0)
                             .tag(i)

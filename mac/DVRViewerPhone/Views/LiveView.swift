@@ -13,6 +13,7 @@ struct LiveView: View {
     /// 畫面在最上層（推入回放頁時停止即時串流）
     @State private var visible = false
     @Environment(\.verticalSizeClass) private var vSize
+    @Environment(\.scenePhase) private var scenePhase
 
     private var landscape: Bool { vSize == .compact }
 
@@ -61,8 +62,8 @@ struct LiveView: View {
             }
         }
         .task(id: StreamKey(channelID: channelID, main: mainStream, conn: ObjectIdentifier(device.connection),
-                            ready: device.webStreaming != nil, visible: visible)) {
-            guard visible, device.webStreaming != nil else { return }  // 等待偵測完成（WebSocket 或私有協定）
+                            ready: device.webStreaming != nil, visible: visible && scenePhase != .background)) {
+            guard visible, scenePhase != .background, device.webStreaming != nil else { return }  // 等待偵測完成（WebSocket 或私有協定）
             await controller.run(connection: device.connection, channelID: channelID, mainStream: mainStream)
         }
         .onAppear { visible = true; UIApplication.shared.isIdleTimerDisabled = true }   // 看影像時不自動鎖定
