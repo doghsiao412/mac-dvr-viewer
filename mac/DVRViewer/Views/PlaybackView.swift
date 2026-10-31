@@ -65,11 +65,14 @@ struct PlaybackView: View {
                     .glassEffect(.regular, in: .capsule)
                     .padding(.horizontal, 16).padding(.top, 8)
                 video
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 16)
                 controls
                     .glassEffect(.regular, in: .rect(cornerRadius: 24))
                     .padding(.horizontal, 16).padding(.bottom, 12)
             }
-            .background(Color.black)
+            // 外框跟隨淺色／深色模式；只有影像區是黑底
+            .background(Color(nsColor: .windowBackgroundColor))
         }
     }
 

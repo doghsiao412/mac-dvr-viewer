@@ -4,12 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.9.1</title>
-      <pubDate>Sat, 31 Oct 2026 06:29:02 GMT</pubDate>
-      <sparkle:version>15</sparkle:version>
-      <sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>
+      <title>DVR Viewer 1.0</title>
+      <pubDate>Sat, 31 Oct 2026 08:16:30 GMT</pubDate>
+      <sparkle:version>16</sparkle:version>
+      <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.9.1
+      <description sparkle:format="markdown"><![CDATA[v1.0
+
+- 第一個正式版。
+- 淺色模式介面調整：即時影像與錄影回放的外框改為跟隨淺色／深色模式，只有影像區為黑底並加上圓角，不再整個畫面都是黑色。
+
+v0.9.1
 
 - 更新視窗改為一般視窗，更新內容以白底顯示，捲動不再卡頓。
 - 4 分割回放時，上方標題列與下方時間軸改放在畫面外，不再遮住影像。
@@ -109,11 +114,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.9.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.9.1/DVR-Viewer-0.9.1.dmg" sparkle:edSignature="SkFnh8IcWfXh/oJbb9aUwjvgRlnOEvzgPceevU+Z1NMfoshJ2cXZBfOv32ZgWdc+cgizyM7QkAYUEAnK9FqsCw==" length="2551531" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.0/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.0/DVR-Viewer-1.0.dmg" sparkle:edSignature="MhnidinZWCiqKlCjDDOSKgKyQOQlfgAkF5mpUB6jyaU0+WpII7SW1fM52DVnLymRx3l9hxUCvEAdeUSs7SkBDg==" length="2556660" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: F7B18pdtYJK3Zd0lbi/COJ+g0YjsRY+Ic7s10BaZtaiBvjdNbKjANj6wjsrZhW7YuGp381zwhCOXxpcKLZeiAA==
-length: 7635
+edSignature: 8dA/fKpxVECEdP54i1HEgZAABv9z5GW2673+meDD8ARyDLUeIVhFgZ5tsfDMenxTtjj0E9k63Z8vVpLJRvVCDA==
+length: 7833
 -->

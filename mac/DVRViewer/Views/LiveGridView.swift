@@ -43,6 +43,10 @@ struct LiveGridView: View {
         .overlay(alignment: .bottom) {
             if store.pageCount > 1 && store.enlargedSlot == nil { PageControl() }
         }
+        // 與回放一致：影像區黑底圓角，外框跟隨淺色／深色模式
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
+        .background(Color(nsColor: .windowBackgroundColor))
         .focusable()
         .focusEffectDisabled()
         .focused($gridFocused)
