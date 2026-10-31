@@ -14,6 +14,9 @@ final class UpdaterModel: ObservableObject {
 
     init() {
         controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+        // 找到新版時一律跳出更新視窗讓使用者決定，不在背景自動下載安裝
+        //（自動安裝模式下，背景檢查找到新版不會有任何提示，只在關閉 App 時安裝）
+        controller.updater.automaticallyDownloadsUpdates = false
         automaticallyChecks = controller.updater.automaticallyChecksForUpdates
         cancellable = controller.updater.publisher(for: \.canCheckForUpdates)
             .receive(on: RunLoop.main)
