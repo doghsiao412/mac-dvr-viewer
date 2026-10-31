@@ -31,6 +31,12 @@ final class AppStore {
     // 提示訊息
     var toast: String?
 
+    // 聲音：即時畫面同時只有一格出聲
+    var audioRef: CameraRef?
+    var volume: Double = (UserDefaults.standard.object(forKey: "volume") as? Double) ?? 0.8 {
+        didSet { UserDefaults.standard.set(volume, forKey: "volume") }
+    }
+
     // 錄影下載
     let exports = ExportManager()
 

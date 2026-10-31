@@ -46,6 +46,9 @@
 - [x] 偵測 DVR 韌體是否支援 WebSocket 串流，不支援時顯示說明（第二台 DVR，8082）
 - [x] **TVT 私有協定（6036）**：舊韌體 DVR 的即時與回放（DVRKit TVTPrivateClient；App 自動選擇傳輸方式；設備設定新增「影像服務 Port」）
 - [x] 錄影下載（Export）：回放畫面「下載」按鈕（⌘D）→ 選擇開始時間／長度（1–60 分或自訂）／子主串流／儲存位置（預設 ~/Movies/DVR Viewer）；背景下載、工具列進度、取消、開啟／在 Finder 顯示
+- [x] 聲音：G.711 A-law 解碼 + AVAudioEngine；即時畫面同時一格出聲（喇叭按鈕）、回放 1× 出聲與音量；WebSocket DVR 已驗證
+- [x] 私有協定（舊韌體）聲音：即時 0x501／0x502、回放 0x803 @84=3（第三台 DVR 實測）
+- [ ] 錄影下載含聲音（目前只下載影像）
 - [ ] 多頻道同步回放、事件書籤
 - [x] App 圖示（程式繪製：攝影機＋錄影燈＋時間軸）、Release 打包 **v0.1**（arm64、ad-hoc 簽章、未公證）→ GitHub Release
 ## Phase 4：整合與優化 — 未開始

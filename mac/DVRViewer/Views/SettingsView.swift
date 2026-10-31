@@ -12,6 +12,13 @@ struct SettingsView: View {
                     Text("實測此類 DVR 經網際網路觀看時，主串流幀率很低（約每秒 1 張）。預設在所有畫面使用子串流（流暢），可在畫面右鍵選單個別切換。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Section("聲音") {
+                    LabeledContent("音量") {
+                        Slider(value: $store.volume, in: 0...1)
+                    }
+                    Text("即時畫面同時只有一個畫面出聲：滑鼠移到畫面上按喇叭圖示。回放只在 1× 播放時輸出聲音。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("截圖") {
                     LabeledContent("儲存位置") {
                         Text(AppStore.snapshotFolder.path(percentEncoded: false))

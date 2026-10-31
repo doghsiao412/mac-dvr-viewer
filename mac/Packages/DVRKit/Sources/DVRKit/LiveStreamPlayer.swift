@@ -22,6 +22,11 @@ public final class LiveStreamPlayer: @unchecked Sendable {
     private var current: MediaStream?
     private var _main: Bool
     private var lastFrameAt = ContinuousClock.now
+    private var _audio = false
+    /// 聲音輸出（G.711）
+    public let audioPlayer = AudioPlayer()
+    /// DVR 回報此頻道沒有聲音
+    public var onAudioUnsupported: (@Sendable () -> Void)?
 
     /// 解碼後的畫面與擷取時間（在背景執行緒呼叫）
     public var onFrame: (@Sendable (CVPixelBuffer, Date) -> Void)?
@@ -50,6 +55,7 @@ public final class LiveStreamPlayer: @unchecked Sendable {
             return (task, current)
         }
         t?.cancel()
+        audioPlayer.stop()
         if let s { Task { await s.close() } }
     }
 
@@ -63,6 +69,24 @@ public final class LiveStreamPlayer: @unchecked Sendable {
         if let s { Task { await s.close() } }
     }
 
+    public var isAudioEnabled: Bool { lock.withLock { _audio } }
+
+    /// 開關聲音。WebSocket：直接送開／關命令；私有協定：以新設定重開串流
+    public func setAudio(_ on: Bool) {
+        let s = lock.withLock { () -> MediaStream? in
+            guard _audio != on else { return nil }
+            _audio = on
+            return current
+        }
+        if !on { audioPlayer.stop() }
+        guard let s else { return }
+        if let f = s.setAudio {
+            Task { await f(on) }
+        } else {
+            Task { await s.close() }  // 私有協定：重開
+        }
+    }
+
     private func emit(_ s: State) { onState?(s) }
 
     private func run() async {
@@ -72,9 +96,11 @@ public final class LiveStreamPlayer: @unchecked Sendable {
             emit(first ? .connecting : .reconnecting("重新連線中"))
             first = false
             let main = isMainStream
+            let audio = isAudioEnabled
             do {
-                let ms = try await connection.openLive(channelId: channelId, mainStream: main)
+                let ms = try await connection.openLive(channelId: channelId, mainStream: main, audio: audio)
                 lock.withLock { current = ms; lastFrameAt = .now }
+                if audio, let f = ms.setAudio { await f(true) }
 
                 // 監看：10 秒沒有訊框就關閉重連
                 let watchdog = Task.detached { [weak self] in
@@ -95,6 +121,11 @@ public final class LiveStreamPlayer: @unchecked Sendable {
                     if Task.isCancelled { break }
                     guard let frame = SHFLFrame.parse(payload) else { continue }
                     lock.withLock { lastFrameAt = .now }
+                    if frame.isAudio {
+                        if isAudioEnabled { audioPlayer.feed(frame.videoData, sampleRate: frame.audioSampleRate ?? 8000) }
+                        continue
+                    }
+                    if isAudioEnabled, ms.audioUnsupported() { lock.withLock { _audio = false }; onAudioUnsupported?() }
                     let pts = CMTime(value: Int64(frame.fileTime / 10), timescale: 1_000_000)
                     if let out = try? decoder.decode(annexB: frame.videoData, pts: pts) {
                         if !playing { playing = true; backoff = 1; emit(.playing) }
@@ -103,7 +134,7 @@ public final class LiveStreamPlayer: @unchecked Sendable {
                 }
                 await ms.close()
                 if Task.isCancelled { break }
-                if isMainStream != main { continue }  // 切換串流：立即重開
+                if isMainStream != main || isAudioEnabled != audio { continue }  // 切換串流或聲音：立即重開
                 throw NVMSError.transport("串流已結束")
             } catch {
                 if Task.isCancelled { break }

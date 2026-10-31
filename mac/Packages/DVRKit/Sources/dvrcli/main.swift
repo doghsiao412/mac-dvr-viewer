@@ -518,6 +518,159 @@ func runExport(host: String, port: Int, user: String, rest: [String], args: Args
     return 0
 }
 
+// MARK: - 聲音探測（只輸出標頭與統計，不輸出聲音內容）
+
+func runAudioProbe(client: NVMSClient, channel: DVRChannel, seconds: Int) async throws {
+    guard let sid = await client.sessionId else { return }
+    let stream = NVMSStream(host: client.host, port: client.port, sessionId: sid)
+    try await stream.connect()
+    try await stream.openPreview(channelId: channel.id, streamIndex: 2, audio: true)
+    try? await Task.sleep(for: .milliseconds(500))
+    if let tid = await stream.taskId { try await stream.send(url: "/device/preview/audio/open", data: ["task_id": tid]) }
+    let watchdog = Task { try? await Task.sleep(for: .seconds(seconds + 3)); await stream.cancelSocket() }
+    defer { watchdog.cancel() }
+    var types: [String: (count: Int, bytes: Int, sample: Data)] = [:]
+    var audioHist: [UInt8: Int] = [:]
+    let t0 = ContinuousClock.now
+    loop: while ContinuousClock.now - t0 < .seconds(seconds) {
+        switch try await stream.receive() {
+        case .frame(let f):
+            let p = f.payload
+            let key = p.count >= 8 ? AnnexB.hexRow(p.subdata(in: (p.startIndex + 4)..<(p.startIndex + 8)), count: 4) : "短 \(p.count)"
+            if p.count > 80, p[p.startIndex + 6] == 6 {
+                let ext = Int(p[p.startIndex + 45]), len = Int(p.u32le(at: 48))
+                let st = 68 + ext
+                if st + len <= p.count { for x in p.subdata(in: (p.startIndex + st)..<(p.startIndex + st + len)) { audioHist[x, default: 0] += 1 } }
+            }
+            var e = types[key] ?? (0, 0, p.prefix(96))
+            e.count += 1; e.bytes += p.count
+            types[key] = e
+        case .message(let url, let code, let raw):
+            print("   ◆ \(url) code=\(code.map(String.init) ?? "-") \(raw.prefix(200))")
+        case .closed(let why):
+            print("   ✖ \(why)"); break loop
+        }
+    }
+    await stream.close(kind: .live)
+    if let a = types.first(where: { $0.key.hasPrefix("03 01 06") })?.value.sample, a.count >= 96 {
+        print("   聲音訊框 offset 40..96：\(AnnexB.hexRow(a.subdata(in: (a.startIndex + 40)..<(a.startIndex + 96)), count: 56))")
+    }
+    print("   聲音資料位元組分佈（前 5 名）：\(audioHist.sorted { $0.value > $1.value }.prefix(5).map { String(format: "0x%02X×%d", $0.key, $0.value) })")
+    print("■ 訊框分類（SHFL offset 4..8）：")
+    for (k, v) in types.sorted(by: { $0.value.count > $1.value.count }) {
+        print("   [\(k)] \(v.count) 個、平均 \(v.bytes / max(v.count, 1)) bytes")
+        print("     標頭：\(AnnexB.hexRow(v.sample, count: 72))")
+    }
+}
+
+// MARK: - 聲音整合測試（音量 0，不從喇叭輸出）
+
+func runAudioTest(host: String, port: Int, user: String, rest: [String], args: Args) async -> Int32 {
+    let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+    do {
+        let chls = try await conn.connect()
+        let n = Int(rest.dropFirst().first ?? "1") ?? 1
+        guard n >= 1, n <= chls.count else { print("頻道錯誤"); return 1 }
+        let ch = chls[n - 1]
+        print("■ 聲音測試 #\(n) \(ch.name)（\(await conn.usesPrivateProtocol ? "私有協定" : "WebSocket")）")
+        let c = Counter()
+        if rest.first == "live" {
+            let p = LiveStreamPlayer(connection: conn, channelId: ch.id, mainStream: false)
+            p.audioPlayer.volume = 0
+            p.onFrame = { _, t in c.frame(t) }
+            p.onAudioUnsupported = { print("   ◆ DVR 回報此頻道不支援聲音") }
+            p.start()
+            try await Task.sleep(for: .seconds(3))
+            print("   聲音關閉 3 秒：影像 \(c.snap().0) 幀、聲音 \(p.audioPlayer.fedFrames) 個")
+            p.setAudio(true)
+            try await Task.sleep(for: .seconds(6))
+            let a1 = p.audioPlayer.fedFrames
+            print("   聲音開啟 6 秒：影像累計 \(c.snap().0) 幀、聲音 \(a1) 個（\(p.audioPlayer.detectedMuLaw.map { $0 ? "μ-law" : "A-law" } ?? "未判定")）")
+            p.setAudio(false)
+            try await Task.sleep(for: .seconds(3))
+            print("   聲音再關閉 3 秒：聲音增加 \(max(p.audioPlayer.fedFrames - a1, 0)) 個（應為 0）")
+            p.stop()
+        } else {
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            guard rest.count >= 3, let start = f.date(from: rest[2]) else { print("用法：audiotest playback <頻道> \"時間\""); return 1 }
+            let p = PlaybackStreamPlayer(connection: conn, channelId: ch.id)
+            p.audioPlayer.volume = 0
+            p.onFrame = { _, t in c.frame(t) }
+            p.setAudio(true)
+            p.play(from: start)
+            try await Task.sleep(for: .seconds(6))
+            print("   回放 1× 6 秒：影像 \(c.snap().0) 幀、聲音 \(p.audioPlayer.fedFrames) 個（\(p.audioPlayer.detectedMuLaw.map { $0 ? "μ-law" : "A-law" } ?? "未判定")）")
+            let a1 = p.audioPlayer.fedFrames
+            p.setSpeed(2)
+            try await Task.sleep(for: .seconds(3))
+            print("   2× 3 秒：聲音增加 \(p.audioPlayer.fedFrames - a1) 個（非 1× 不輸出，應為 0）")
+            p.stop()
+        }
+        try await Task.sleep(for: .seconds(1))
+    } catch {
+        print("❌ \(error)"); await conn.disconnect(); return 3
+    }
+    await conn.disconnect()
+    print("■ 已登出")
+    return 0
+}
+
+/// 回放串流中聲音／影像訊框的序號與時間（不輸出內容）
+func runPlaybackAudioProbe(client: NVMSClient, channel: DVRChannel, start: Date, seconds: Int) async throws {
+    guard let sid = await client.sessionId else { return }
+    let stream = NVMSStream(host: client.host, port: client.port, sessionId: sid)
+    try await stream.connect()
+    let s0 = Int(start.timeIntervalSince1970)
+    try await stream.openPlayback(channelId: channel.id, start: s0, end: s0 + 600, streamIndex: 1)
+    if let tid = await stream.taskId { try await stream.send(url: "/device/playback/audio/open", data: ["task_id": tid]) }
+    let watchdog = Task { try? await Task.sleep(for: .seconds(seconds + 3)); await stream.cancelSocket() }
+    defer { watchdog.cancel() }
+    let tf = DateFormatter(); tf.dateFormat = "HH:mm:ss.SSS"
+    var rows: [String] = []
+    var audio = 0, video = 0
+    var lastVideoSeq = 0
+    let t0 = ContinuousClock.now
+    loop: while ContinuousClock.now - t0 < .seconds(seconds) {
+        switch try await stream.receive() {
+        case .frame(let fr):
+            guard let f = SHFLFrame.parse(fr.payload) else { continue }
+            if f.isAudio { audio += 1 } else { video += 1; lastVideoSeq = Int(f.sequence) }
+            if rows.count < 40 { rows.append("\(f.isAudio ? "聲" : "影")\(f.isKeyframe && !f.isAudio ? "K" : " ") seq=\(f.sequence) \(tf.string(from: f.captureTime)) \(f.videoData.count)B") }
+            // 同 App：只對影像訊框、序號 %8 回報
+            if !f.isAudio, f.sequence % 8 == 0 { try? await stream.refreshPlayIndex(Int(f.sequence)) }
+        case .message(let url, let code, _):
+            if url.contains("audio") || (code ?? 0) != 0 { print("   ◆ \(url) code=\(code.map(String.init) ?? "-")") }
+        case .closed: break loop
+        }
+    }
+    await stream.close(kind: .playback)
+    rows.forEach { print("   " + $0) }
+    print("■ \(seconds) 秒：影像 \(video)、聲音 \(audio)、最後影像序號 \(lastVideoSeq)")
+}
+
+/// 逐頻道開啟即時（audio=1），統計聲音訊框（不輸出內容）
+func runAudioScan(host: String, port: Int, user: String, args: Args) async -> Int32 {
+    // --private：強制私有協定；--service-port：私有協定 Port（預設 6036）
+    let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
+    if args.bool("private") { await conn.setForcePrivateProtocol(true) }
+    do {
+        var chls = try await conn.connect()
+        if let only = args.flags["channels"].flatMap(Int.init) { chls = Array(chls.prefix(only)) }
+        print("■ 聲音掃描（\(await conn.usesPrivateProtocol ? "私有協定" : "WebSocket")）")
+        for ch in chls {
+            let ms = try await conn.openLive(channelId: ch.id, mainStream: false, audio: true)
+            if let f = ms.setAudio { await f(true) }
+            var a = 0, v = 0
+            let t = Task { try? await Task.sleep(for: .seconds(3)); await ms.close() }
+            for try await p in ms.frames { if let f = SHFLFrame.parse(p) { if f.isAudio { a += 1 } else { v += 1 } } }
+            t.cancel()
+            print("   #\(ch.index + 1) \(ch.name)：影像 \(v)、聲音 \(a)\(ms.audioUnsupported() ? "（DVR 回報不支援）" : "")")
+        }
+    } catch { print("❌ \(error)") }
+    await conn.disconnect()
+    return 0
+}
+
 func dayRange(_ day: String) -> (String, String, Date)? {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
@@ -544,6 +697,10 @@ func run() async -> Int32 {
     let host = args.positional[0], user = args.positional[2], cmd = args.positional[3]
     devPort = port
     let rest = Array(args.positional.dropFirst(4))
+    if cmd == "audioscan" { return await runAudioScan(host: host, port: port, user: user, args: args) }
+    if cmd == "audiotest" {
+        return await runAudioTest(host: host, port: port, user: user, rest: rest, args: args)
+    }
     if cmd == "export" {
         return await runExport(host: host, port: port, user: user, rest: rest, args: args)
     }
@@ -622,6 +779,17 @@ func run() async -> Int32 {
             guard let start = f.date(from: rest[1]) else { print("時間格式錯誤"); exitCode = 1; break }
             try await runStream(client: client, channel: c, kind: .playback, seconds: args.int("seconds", 5),
                                 main: args.bool("main"), playbackStart: start)
+
+        case "pbaudioprobe":
+            guard let c = channel(rest.first), rest.count >= 2 else { print("用法：pbaudioprobe <頻道> \"時間\""); exitCode = 1; break }
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            guard let st = f.date(from: rest[1]) else { exitCode = 1; break }
+            try await runPlaybackAudioProbe(client: client, channel: c, start: st, seconds: args.int("seconds", 4))
+
+        case "audioprobe":
+            guard let c = channel(rest.first) else { print("找不到頻道"); exitCode = 1; break }
+            print("■ 聲音探測：頻道 #\(c.index + 1) \(c.name)")
+            try await runAudioProbe(client: client, channel: c, seconds: args.int("seconds", 6))
 
         case "snapshot":
             guard let c = channel(rest.first) else { print("找不到頻道"); exitCode = 1; break }

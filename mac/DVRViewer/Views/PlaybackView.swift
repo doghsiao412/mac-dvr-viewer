@@ -31,6 +31,7 @@ struct PlaybackView: View {
             await loadRanges()
         }
         .onDisappear { controller.stop() }
+        .onChange(of: store.volume, initial: true) { _, v in controller.setVolume(v) }
         .sheet(isPresented: $showExport) {
             if let ref = store.playbackRef {
                 ExportSheet(ref: ref,
@@ -183,6 +184,16 @@ struct PlaybackView: View {
                     .help("前進 10 秒").keyboardShortcut(.rightArrow, modifiers: [])
                 Button { controller.step() } label: { Image(systemName: "forward.frame") }
                     .help("逐格（.）").keyboardShortcut(".", modifiers: [])
+                Button { togglePlaybackAudio() } label: {
+                    Image(systemName: controller.audioOn ? "speaker.wave.2.fill" : "speaker.slash")
+                        .frame(width: 20)
+                }
+                .help(controller.audioOn ? "關閉聲音" : "開啟聲音（只在 1× 播放時輸出）")
+                if controller.audioOn {
+                    Slider(value: Binding(get: { store.volume }, set: { store.volume = $0 }), in: 0...1)
+                        .frame(width: 70)
+                        .help("音量")
+                }
                 Picker("倍速", selection: Binding(get: { controller.speed }, set: { controller.setSpeed($0) })) {
                     ForEach(speeds, id: \.self) { s in Text(s == 0.5 ? "0.5×" : "\(Int(s))×").tag(s) }
                 }
@@ -250,6 +261,10 @@ struct PlaybackView: View {
     }
 
     // MARK: - 動作
+
+    private func togglePlaybackAudio() {
+        controller.setAudio(!controller.audioOn)
+    }
 
     private func zoomBy(_ f: Double) {
         withAnimation(.snappy(duration: 0.2)) {

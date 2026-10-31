@@ -88,7 +88,7 @@ public enum RecordingExporter {
             for try await payload in ms.frames {
                 try Task.checkCancellation()
                 lastData.touch()
-                guard let f = SHFLFrame.parse(payload) else { continue }
+                guard let f = SHFLFrame.parse(payload), !f.isAudio else { continue }  // 目前只下載影像
                 // 流量控制：立即回報，讓 DVR 持續快速傳送
                 if f.sequence > 0, f.sequence % 8 == 0 { await ms.acknowledge(Int(f.sequence)) }
                 if f.captureTime >= end { break }

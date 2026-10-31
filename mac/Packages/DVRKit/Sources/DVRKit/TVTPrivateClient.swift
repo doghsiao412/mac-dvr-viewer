@@ -123,7 +123,7 @@ public actor TVTPrivateClient {
     // MARK: - 即時影像
 
     /// 開啟即時串流。channelGUID 例："{00000001-0000-0000-0000-000000000000}"；chNo 從 0 起；streamType 1 主 / 2 子
-    public func openLive(channelGUID: String, chNo: Int, streamType: Int) async throws -> (task: Data, frames: AsyncThrowingStream<Data, Error>) {
+    public func openLive(channelGUID: String, chNo: Int, streamType: Int, audio: Bool = false) async throws -> (task: Data, frames: AsyncThrowingStream<Data, Error>) {
         guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { throw ClientError.disconnected }
         let task = TVTGUID.random()
         let (stream, cont) = AsyncThrowingStream<Data, Error>.makeStream(bufferingPolicy: .bufferingNewest(240))
@@ -132,7 +132,7 @@ public actor TVTPrivateClient {
         liveSinks[key] = cont
         let xml = "<?xml version='1.0' encoding='utf-8'?><request version='1.0' systemType='NVMS-9000' clientType='SYS'>"
             + "<destId>\(channelGUID)</destId><taskId>\(TVTGUID.string(task))</taskId><chNo>\(chNo)</chNo>"
-            + "<audio>0</audio><streamType>\(streamType)</streamType></request>"
+            + "<audio>\(audio ? 1 : 0)</audio><streamType>\(streamType)</streamType></request>"
         do {
             _ = try await routed(sub: 0x505, dest: dest, task: task, op: 1, payload: Data(xml.utf8))
         } catch {
@@ -148,8 +148,34 @@ public actor TVTPrivateClient {
         liveSinks[key]?.finish(); liveSinks[key] = nil
         guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { return }
         var p = Data(count: 76)
-        p.putU32(1, at: 0)
+        p.putU32(UInt32(chNo + 1), at: 0)  // 頻道編號（1 起）
         _ = try? await routed(sub: 0x502, dest: dest, task: task, op: 2, payload: p)
+    }
+
+    // MARK: - 即時聲音（2026-10-31 由 SuperLive Plus 封包分析）
+    // 開：0x501 op=1（獨立的聲音任務 GUID）；關：0x502 op=2（同一任務）
+    // 內容 76 bytes：u32 頻道編號(1 起) @0、u32 6 @68、u32 3 @72
+    // 聲音訊框與即時影像同樣以 0x6/0x10001 送達（SHFL offset 8 = 頻道），由既有 liveSinks 接收
+
+    private func liveAudioPayload(chNo: Int) -> Data {
+        var p = Data(count: 76)
+        p.putU32(UInt32(chNo + 1), at: 0)
+        p.putU32(6, at: 68)
+        p.putU32(3, at: 72)
+        return p
+    }
+
+    /// 開啟即時聲音，回傳聲音任務 GUID
+    public func openLiveAudio(channelGUID: String, chNo: Int) async throws -> Data {
+        guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { throw ClientError.disconnected }
+        let task = TVTGUID.random()
+        _ = try await routed(sub: 0x501, dest: dest, task: task, op: 1, payload: liveAudioPayload(chNo: chNo))
+        return task
+    }
+
+    public func closeLiveAudio(channelGUID: String, chNo: Int, task: Data) async {
+        guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { return }
+        _ = try? await routed(sub: 0x502, dest: dest, task: task, op: 2, payload: liveAudioPayload(chNo: chNo))
     }
 
     // MARK: - 回放
@@ -193,7 +219,8 @@ public actor TVTPrivateClient {
         p.putU16(1, at: 10)           // 頻道數量
         p.putU32(UInt32(chNo + 1), at: 12)  // 頻道編號清單（1 起）。注意：不是位元遮罩（2026-10-31 實測修正）
         p.putU32(7, at: 80)
-        if open { p.putU16(1, at: 86) }
+        // @84：3 = 含聲音（SuperLive 開聲音時送 3；聲音訊框混在回放串流，延伸區第 3 byte = 1）
+        if open { p.putU16(3, at: 84); p.putU16(1, at: 86) }
         return p
     }
 
@@ -325,6 +352,8 @@ public actor TVTPrivateClient {
         buffer = buffer.subdata(in: o..<buffer.endIndex)
     }
 
+    static let debug = ProcessInfo.processInfo.environment["DVRKIT_DEBUG"] == "1"
+
     private func handle(_ body: Data) {
         let cmd = body.u32le(at: 0), sub = body.u32le(at: 4), id = body.u32le(at: 8)
         let data = body.subdata(in: (body.startIndex + 16)..<body.endIndex)
@@ -344,7 +373,8 @@ public actor TVTPrivateClient {
                 taskSinks.removeValue(forKey: task)?.finish()  // 回放結束
             }
         default:
-            break  // 0x6 / a01 / a02 / a03 等狀態通知
+            // 0x6 / a01 / a02 / a03 等狀態通知；DVRKIT_DEBUG=1 時列出未處理的訊息類型
+            if Self.debug { print(String(format: "[TVT] 未處理 cmd=0x%X sub=0x%X len=%d", cmd, sub, data.count)) }
         }
     }
 }

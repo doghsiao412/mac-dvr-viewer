@@ -36,6 +36,14 @@ struct VideoTile: View {
         .overlay(alignment: .bottomLeading) { nameBar }
         .overlay(alignment: .topTrailing) { if hovering { tileButtons } }
         .onHover { hovering = $0 }
+        .onChange(of: audioOn, initial: true) { _, on in controller.setAudio(on) }
+        .onChange(of: store.volume, initial: true) { _, v in controller.setVolume(v) }
+        .onAppear {
+            controller.onAudioUnsupported = { [ref] in
+                if store.audioRef == ref { store.audioRef = nil }
+                store.showToast("此頻道沒有聲音")
+            }
+        }
         .task(id: StreamKey(ref: ref, main: mainStream, conn: ObjectIdentifier(device.connection), ready: device.webStreaming != nil)) {
             guard device.webStreaming != nil else { return }  // 等待偵測完成（WebSocket 或私有協定）
             await controller.run(connection: device.connection, channelID: ref.channelID, mainStream: mainStream)
@@ -77,6 +85,7 @@ struct VideoTile: View {
     private var nameBar: some View {
         HStack(spacing: 6) {
             Text(device.displayName(ref.channelID)).fontWeight(.medium)
+            if audioOn { Image(systemName: "speaker.wave.2.fill").foregroundStyle(.yellow) }
             if mainStream { Text("主").font(.caption2).padding(.horizontal, 3).background(.white.opacity(0.25), in: RoundedRectangle(cornerRadius: 3)) }
             if let t = controller.lastFrameTime {
                 Text(t, format: .dateTime.hour().minute().second()).monospacedDigit().foregroundStyle(.white.opacity(0.8))
@@ -96,12 +105,22 @@ struct VideoTile: View {
             if zoom > 1.01 {
                 iconButton("arrow.down.right.and.arrow.up.left", "重設縮放") { resetZoom() }
             }
+            iconButton(audioOn ? "speaker.wave.2.fill" : "speaker.slash", audioOn ? "關閉聲音" : "開啟聲音（同時只有一個畫面出聲）") {
+                toggleAudio()
+            }
             iconButton("camera", "截圖") {
                 store.saveSnapshot(controller.renderer.lastPixelBuffer, name: device.displayName(ref.channelID),
                                    time: controller.renderer.lastTime)
             }
         }
         .padding(6)
+    }
+
+    private var audioOn: Bool { store.audioRef == ref }
+
+    private func toggleAudio() {
+        if audioOn { store.audioRef = nil; return }
+        store.audioRef = ref
     }
 
     private func iconButton(_ symbol: String, _ help: String, action: @escaping () -> Void) -> some View {

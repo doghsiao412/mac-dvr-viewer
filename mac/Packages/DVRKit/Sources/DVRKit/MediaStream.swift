@@ -11,6 +11,18 @@ public struct MediaStream: Sendable {
     public let close: @Sendable () async -> Void
     /// 底層方式（顯示用）
     public let transport: String
+    /// 開關聲音；nil 表示需在開啟串流時指定（私有協定）
+    public var setAudio: (@Sendable (Bool) async -> Void)? = nil
+    /// DVR 回報此頻道不支援聲音（536870944）
+    public var audioUnsupported: @Sendable () -> Bool = { false }
+}
+
+/// 跨 Task 共用的旗標
+final class FlagBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var v = false
+    var value: Bool { lock.withLock { v } }
+    func set() { lock.withLock { v = true } }
 }
 
 extension MediaStream {
@@ -21,6 +33,7 @@ extension MediaStream {
         try await ws.connect()
         try await open(ws)
         let (stream, cont) = AsyncThrowingStream<Data, Error>.makeStream(bufferingPolicy: live ? .bufferingNewest(240) : .unbounded)
+        let noAudio = FlagBox()
         let reader = Task {
             while !Task.isCancelled {
                 let ev: NVMSStream.Event? = try? await ws.receive()
@@ -28,6 +41,10 @@ extension MediaStream {
                 case .frame(let f)?:
                     cont.yield(f.payload)
                 case .message(let url, let code, _)?:
+                    if url.contains("/audio/") {
+                        if code == 536_870_944 { noAudio.set() }  // 此頻道不支援聲音
+                        continue
+                    }
                     if let code, code != 0, url.hasPrefix("/device/preview") || url.hasPrefix("/device/playback") {
                         if code == 536_870_961 { cont.finish() } else { cont.finish(throwing: NVMSError.device(command: url, code: code)) }
                         return
@@ -51,6 +68,13 @@ extension MediaStream {
             await ws.close(kind: kind)
             cont.finish()
         }
-        return MediaStream(frames: stream, acknowledge: ack, setKeyFrameOnly: keyFrame, close: close, transport: "WebSocket")
+        var ms = MediaStream(frames: stream, acknowledge: ack, setKeyFrameOnly: keyFrame, close: close, transport: "WebSocket")
+        ms.setAudio = { on in
+            guard let tid = await ws.taskId else { return }
+            let path = live ? "/device/preview/audio/" : "/device/playback/audio/"
+            try? await ws.send(url: path + (on ? "open" : "close"), data: ["task_id": tid])
+        }
+        ms.audioUnsupported = { noAudio.value }
+        return ms
     }
 }

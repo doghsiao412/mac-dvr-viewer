@@ -22,7 +22,12 @@ public struct SHFLFrame: Sendable {
     public let fourCC: String?
     public let width: Int?
     public let height: Int?
+    /// 媒體資料：影像為 Annex-B；聲音為 G.711 等原始取樣（見 audioFormat）
     public let videoData: Data
+    /// 聲音訊框（offset 6 = 0x06，或延伸區第 3 byte = 1）
+    public let isAudio: Bool
+    /// 聲音格式（僅聲音訊框，延伸區：00 01 01 00 | u16 位元數 | u16 ? | u32 取樣率）
+    public let audioSampleRate: Int?
 
     static let magic = Data("SHFL".utf8)
     static let headerSize = 68
@@ -37,7 +42,13 @@ public struct SHFLFrame: Sendable {
         let videoLen = Int(d.u32le(at: 48))
         var fourCC: String?
         var w: Int?, h: Int?
-        if extLen >= 12, d.count >= headerSize + 12 {
+        var audio = d[base + 6] == 6
+        var rate: Int?
+        if extLen >= 12, d.count >= headerSize + 12, d[base + 70] == 1 {
+            // 聲音延伸區（2026-10-31 實測：00 01 01 00 | 10 00 | 80 3e | 40 1f 00 00 → 8000 Hz）
+            audio = true
+            rate = Int(d.u32le(at: 76))
+        } else if extLen >= 12, d.count >= headerSize + 12 {
             let fcc = d.subdata(in: (base + 72)..<(base + 76))
             fourCC = String(data: fcc, encoding: .ascii)
             w = Int(d[base + 76]) | Int(d[base + 77]) << 8
@@ -50,6 +61,7 @@ public struct SHFLFrame: Sendable {
         let unixSeconds = Double(Int64(ft) - 116_444_736_000_000_000) / 10_000_000
         return SHFLFrame(isKeyframe: keyframe, captureTime: Date(timeIntervalSince1970: unixSeconds),
                          fileTime: ft, sequence: seq, fourCC: fourCC, width: w, height: h,
-                         videoData: d.subdata(in: (base + start)..<(base + end)))
+                         videoData: d.subdata(in: (base + start)..<(base + end)),
+                         isAudio: audio, audioSampleRate: audio ? (rate.flatMap { (4000...48000).contains($0) ? $0 : nil } ?? 8000) : nil)
     }
 }

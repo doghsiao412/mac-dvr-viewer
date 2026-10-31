@@ -14,8 +14,23 @@ final class LiveTileController {
     let renderer = VideoRenderer()
     private(set) var phase: Phase = .idle
     private(set) var lastFrameTime: Date?
+    private(set) var audioUnsupported = false
     private var player: LiveStreamPlayer?
     private var timeTicker = 0
+    private var wantAudio = false
+    private var volume: Float = 0.8
+    var onAudioUnsupported: (() -> Void)?
+
+    func setAudio(_ on: Bool) {
+        wantAudio = on
+        if on { audioUnsupported = false }
+        player?.setAudio(on)
+    }
+
+    func setVolume(_ v: Double) {
+        volume = Float(v)
+        player?.audioPlayer.volume = volume
+    }
 
     /// 執行直到所屬 Task 被取消（View 消失或頻道改變）
     func run(connection: DVRConnection, channelID: String, mainStream: Bool) async {
@@ -37,7 +52,16 @@ final class LiveTileController {
                 }
             }
         }
+        p.onAudioUnsupported = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.audioUnsupported = true
+                self.onAudioUnsupported?()
+            }
+        }
+        p.audioPlayer.volume = volume
         player = p
+        if wantAudio { p.setAudio(true) }
         p.start()
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(3600))
@@ -68,6 +92,18 @@ final class PlaybackController {
     private(set) var currentTime: Date?
     private(set) var speed: Double = 1
     private var player: PlaybackStreamPlayer?
+    private(set) var audioOn = false
+    private var volume: Float = 0.8
+
+    func setAudio(_ on: Bool) {
+        audioOn = on
+        player?.setAudio(on)
+    }
+
+    func setVolume(_ v: Double) {
+        volume = Float(v)
+        player?.audioPlayer.volume = volume
+    }
     private var key: String?
 
     var isPaused: Bool { phase == .paused }
@@ -94,6 +130,8 @@ final class PlaybackController {
                 }
             }
             p.setSpeed(speed)
+            p.audioPlayer.volume = volume
+            p.setAudio(audioOn)
             player = p
             key = k
             renderer.clear()

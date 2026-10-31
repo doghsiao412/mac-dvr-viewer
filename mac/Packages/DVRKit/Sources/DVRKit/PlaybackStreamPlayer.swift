@@ -36,6 +36,9 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
     private var keyFrameMode = false
     private var currentTime: Date?
     private var tasks: [Task<Void, Never>] = []
+    private var audioOn = false
+    /// 聲音輸出（只在 1× 正常播放時輸出）
+    public let audioPlayer = AudioPlayer()
 
     public var onFrame: (@Sendable (CVPixelBuffer, Date) -> Void)?
     public var onState: (@Sendable (State) -> Void)?
@@ -69,6 +72,7 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
             currentTime = date
             return generation
         }
+        audioPlayer.flush()
         onState?(.loading)
         let endDate = end ?? date.addingTimeInterval(12 * 3600)
         let t1 = Task.detached(priority: .userInitiated) { [weak self] () -> Void in
@@ -82,17 +86,29 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
 
     public func pause() {
         lock.withLock { paused = true }
+        audioPlayer.flush()
         onState?(.paused)
     }
 
     public func resume() {
         let (s, idx) = lock.withLock { () -> (MediaStream?, UInt32?) in
             paused = false
-            return (stream, queue.last?.sequence)
+            return (stream, queue.last(where: { !$0.isAudio })?.sequence)
         }
         onState?(.playing)
         // 立即回報一次，讓 DVR 繼續送資料（同網頁 _resumeDownload）
         if let s, let idx { Task { await s.acknowledge(Int(idx)) } }
+    }
+
+    public var isAudioEnabled: Bool { lock.withLock { audioOn } }
+
+    public func setAudio(_ on: Bool) {
+        let s = lock.withLock { () -> MediaStream? in
+            audioOn = on
+            return stream
+        }
+        if !on { audioPlayer.stop() }
+        if let s, let f = s.setAudio { Task { await f(on) } }
     }
 
     public func stepFrame() {
@@ -118,6 +134,7 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
             return (tasks, stream)
         }
         ts.forEach { $0.cancel() }
+        audioPlayer.stop()
         if let s { Task { await s.close() } }
         onState?(.stopped)
     }
@@ -135,6 +152,7 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
             guard isCurrent(gen) else { await ms.close(); return }
             lock.withLock { stream = ms }
             if lock.withLock({ keyFrameMode }), let kf = ms.setKeyFrameOnly { await kf(true, start) }
+            if lock.withLock({ audioOn }), let f = ms.setAudio { await f(true) }
             for try await payload in ms.frames {
                 if Task.isCancelled || !isCurrent(gen) { return }
                 if let fr = SHFLFrame.parse(payload) {
@@ -178,6 +196,14 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
                 continue
             }
             idleSince = nil
+
+            // 聲音：不參與控速，依序送出；只在 1× 且非逐格時輸出
+            if frame.isAudio {
+                if lock.withLock({ audioOn }), spd == 1, !step {
+                    audioPlayer.feed(frame.videoData, sampleRate: frame.audioSampleRate ?? 8000)
+                }
+                continue
+            }
 
             // 控速
             if anchorWall == nil || spd != anchorSpeed || frame.fileTime < anchorFT {

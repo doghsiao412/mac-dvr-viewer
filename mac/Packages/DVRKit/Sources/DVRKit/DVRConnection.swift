@@ -203,15 +203,29 @@ public actor DVRConnection {
         return c
     }
 
-    public func openLive(channelId: String, mainStream: Bool) async throws -> MediaStream {
+    public func openLive(channelId: String, mainStream: Bool, audio: Bool = false) async throws -> MediaStream {
         if channels.isEmpty { _ = try await connect() }
         if usesPrivateProtocol {
             guard let ch = channel(channelId) else { throw NVMSError.badXML("找不到頻道") }
             let c = try await privateSession()
             let (task, frames) = try await c.openLive(channelGUID: ch.id, chNo: ch.index, streamType: mainStream ? 1 : 2)
-            return MediaStream(frames: frames, acknowledge: { _ in }, setKeyFrameOnly: nil,
-                               close: { await c.closeLive(channelGUID: ch.id, chNo: ch.index, task: task) },
-                               transport: "私有協定")
+            let audioTask = AudioTaskBox()
+            var ms = MediaStream(frames: frames, acknowledge: { _ in }, setKeyFrameOnly: nil,
+                                 close: {
+                                     if let t = audioTask.take() { await c.closeLiveAudio(channelGUID: ch.id, chNo: ch.index, task: t) }
+                                     await c.closeLive(channelGUID: ch.id, chNo: ch.index, task: task)
+                                 },
+                                 transport: "私有協定")
+            // 聲音：獨立的 0x501／0x502 任務，可在串流中途開關
+            ms.setAudio = { on in
+                if on {
+                    guard audioTask.peek() == nil else { return }
+                    if let t = try? await c.openLiveAudio(channelGUID: ch.id, chNo: ch.index) { audioTask.set(t) }
+                } else if let t = audioTask.take() {
+                    await c.closeLiveAudio(channelGUID: ch.id, chNo: ch.index, task: t)
+                }
+            }
+            return ms
         }
         let sid = try await sessionId()
         return try await MediaStream.webSocket(host: host, port: port, sessionId: sid, live: true) { ws in
@@ -245,4 +259,13 @@ public actor DVRConnection {
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return f
     }
+}
+
+/// 私有協定即時聲音任務 GUID（跨 Task 共用）
+final class AudioTaskBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: Data?
+    func set(_ t: Data) { lock.withLock { task = t } }
+    func peek() -> Data? { lock.withLock { task } }
+    func take() -> Data? { lock.withLock { defer { task = nil }; return task } }
 }
