@@ -34,7 +34,19 @@ struct DeviceListView: View {
             .navigationTitle("DVR Viewer")
             .navigationDestination(for: UUID.self) { id in
                 if let device = store.devices.first(where: { $0.id == id }) {
-                    ChannelListView(device: device)
+                    ChannelGridView(device: device)
+                }
+            }
+            .navigationDestination(for: PhoneRoute.self) { route in
+                switch route {
+                case .live(let ref):
+                    if let device = store.devices.first(where: { $0.id == ref.deviceID }) {
+                        LiveView(device: device, channelID: ref.channelID)
+                    }
+                case .playback(let ref):
+                    if let device = store.devices.first(where: { $0.id == ref.deviceID }) {
+                        PlaybackView(device: device, channelID: ref.channelID)
+                    }
                 }
             }
             .toolbar {

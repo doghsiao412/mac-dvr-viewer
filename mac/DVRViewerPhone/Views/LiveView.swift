@@ -10,6 +10,8 @@ struct LiveView: View {
     @AppStorage("phone.live.mainStream") private var mainStream = false
     @AppStorage("phone.live.audio") private var audioOn = false
     @State private var showControls = true
+    /// 畫面在最上層（推入回放頁時停止即時串流）
+    @State private var visible = false
     @Environment(\.verticalSizeClass) private var vSize
 
     private var landscape: Bool { vSize == .compact }
@@ -51,13 +53,20 @@ struct LiveView: View {
         .navigationTitle(device.displayName(channelID))
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: audioOn, initial: true) { _, on in controller.setAudio(on) }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: PhoneRoute.playback(CameraRef(deviceID: device.id, channelID: channelID))) {
+                    Label("錄影回放", systemImage: "clock.arrow.circlepath")
+                }
+            }
+        }
         .task(id: StreamKey(channelID: channelID, main: mainStream, conn: ObjectIdentifier(device.connection),
-                            ready: device.webStreaming != nil)) {
-            guard device.webStreaming != nil else { return }  // 等待偵測完成（WebSocket 或私有協定）
+                            ready: device.webStreaming != nil, visible: visible)) {
+            guard visible, device.webStreaming != nil else { return }  // 等待偵測完成（WebSocket 或私有協定）
             await controller.run(connection: device.connection, channelID: channelID, mainStream: mainStream)
         }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }   // 看影像時不自動鎖定
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onAppear { visible = true; UIApplication.shared.isIdleTimerDisabled = true }   // 看影像時不自動鎖定
+        .onDisappear { visible = false; UIApplication.shared.isIdleTimerDisabled = false }
     }
 
     private var video: some View {
@@ -122,5 +131,6 @@ struct LiveView: View {
         let main: Bool
         let conn: ObjectIdentifier
         let ready: Bool
+        let visible: Bool
     }
 }

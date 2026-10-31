@@ -313,6 +313,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "DVR Viewer";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "DVR Viewer 需要連線到區域網路內的 DVR／NVR 以觀看即時影像與錄影。";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "把下載的錄影儲存到「照片」。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -346,6 +347,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "DVR Viewer";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "DVR Viewer 需要連線到區域網路內的 DVR／NVR 以觀看即時影像與錄影。";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "把下載的錄影儲存到「照片」。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
