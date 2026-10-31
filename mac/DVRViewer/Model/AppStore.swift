@@ -24,7 +24,7 @@ final class AppStore {
         var layout: Int = 4
         var slots: [CameraRef?] = Array(repeating: nil, count: AppStore.maxSlots)
     }
-    var customViews: [CustomView] = [] { didSet { saveUI() } }
+    var customViews: [CustomView] = [] { didSet { saveUI(); if !loadingUI { sync.localChanged() } } }
     private(set) var customID: UUID?
     var currentCustom: CustomView? { customViews.first { $0.id == customID } }
 
@@ -107,6 +107,7 @@ final class AppStore {
 
     init() {
         Notifier.shared.activate()
+        defer { sync.attach(self) }
         devices = DevicePersistence.load().map(DeviceModel.init)
         loadUI()
         devices.forEach { $0.start() }
@@ -138,7 +139,8 @@ final class AppStore {
         guard let m = device(id) else { return }
         m.stop()
         devices.removeAll { $0.id == id }
-        KeychainStore.deletePassword(for: id)
+        // 鑰匙圈存取可能要等使用者回應授權視窗：放到背景，避免畫面卡住
+        Task.detached { KeychainStore.deletePassword(for: id) }
         for i in customViews.indices { customViews[i].slots = customViews[i].slots.map { $0?.deviceID == id ? nil : $0 } }
         slots = slots.map { $0?.deviceID == id ? nil : $0 }
         if playbackRef?.deviceID == id { playbackRef = nil }
@@ -146,7 +148,51 @@ final class AppStore {
         persistDevices()
     }
 
-    func persistDevices() { DevicePersistence.save(devices.map(\.config)) }
+    func persistDevices() {
+        DevicePersistence.save(devices.map(\.config))
+        sync.localChanged()
+    }
+
+    // MARK: - 同步資料夾
+
+    /// 多台 Mac 之間同步 DVR 清單與自訂畫面（不含密碼）
+    let sync = SyncManager()
+
+    /// 套用同步資料夾中其他 Mac 的設定（以最後寫入的為準）
+    func applySynced(devices cfgs: [DeviceConfig], customViews cv: [CustomView]) {
+        let ids = Set(cfgs.map(\.id))
+        for m in devices where !ids.contains(m.id) { remove(m.id) }   // 其他 Mac 移除的 DVR
+        var list: [DeviceModel] = []
+        for c in cfgs {
+            if let m = device(c.id) {
+                if m.config != c { m.apply(c) }
+                list.append(m)
+            } else {
+                // 其他 Mac 新增的 DVR：這台沒有密碼，需在「編輯…」輸入一次
+                let m = DeviceModel(config: c)
+                list.append(m)
+                m.start()
+            }
+        }
+        devices = list
+        DevicePersistence.save(devices.map(\.config))
+        if !cv.isEmpty {
+            let valid = Set(devices.map(\.id))
+            customViews = cv.map { v in
+                var v = v
+                if v.slots.count < Self.maxSlots { v.slots += Array(repeating: nil, count: Self.maxSlots - v.slots.count) }
+                v.slots = v.slots.map { r in r.flatMap { valid.contains($0.deviceID) ? $0 : nil } }
+                return v
+            }
+            let c = currentCustom ?? customViews[0]
+            loadingUI = true
+            customID = c.id
+            layout = c.layout
+            slots = c.slots
+            loadingUI = false
+            saveUI()
+        }
+    }
 
     // MARK: - DVR 排序（側邊欄、切換選單與 ⌥⌘1–9 都依此順序）
 

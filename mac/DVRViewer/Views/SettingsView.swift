@@ -25,6 +25,33 @@ struct SettingsView: View {
                     Text("即時畫面同時只有一個畫面出聲：滑鼠移到畫面上按喇叭圖示。回放只在 1× 播放時輸出聲音。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Section {
+                    if let f = store.sync.folder {
+                        LabeledContent("同步資料夾") {
+                            Text(f.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle)
+                                .textSelection(.enabled)
+                        }
+                        HStack {
+                            Button("立即同步") { store.sync.syncNow() }
+                            Button("更換資料夾…") { store.sync.chooseFolder() }
+                            Spacer()
+                            Button("停止同步", role: .destructive) { store.sync.stopSync() }
+                        }
+                        if let e = store.sync.lastError {
+                            Text(e).font(.caption).foregroundStyle(.red)
+                        } else if let d = store.sync.lastSync {
+                            Text("上次同步：\(d.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Button("選擇同步資料夾…") { store.sync.chooseFolder() }
+                    }
+                } header: {
+                    Text("多台 Mac 同步")
+                } footer: {
+                    Text("選一個 iCloud 雲碟、Google 雲端硬碟或 Dropbox 中的資料夾，其他 Mac 選同一個資料夾即可同步 DVR 清單、頻道名稱與順序、自訂畫面。密碼不會同步：在其他 Mac 第一次連線時，於 DVR 名稱上按右鍵 →「編輯…」輸入一次。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("更新") {
                     Toggle("自動檢查更新（開啟 App 時及每天）", isOn: $updater.automaticallyChecks)
                     HStack {
@@ -64,6 +91,6 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem { Label("關於", systemImage: "info.circle") }
         }
-        .frame(width: 520, height: 440)
+        .frame(width: 560, height: 560)
     }
 }

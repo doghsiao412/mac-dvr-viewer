@@ -1,11 +1,17 @@
 # 進度
 
-## 目前狀態（2026-10-31，v0.3）
+## 目前狀態（2026-10-31，v0.8）
 
 **原生直連可行，已在實體 DVR 驗證**：Swift 程式（不經 SuperLive Plus、不用 Docker）已能登入外網 DVR、
 讀設備資訊與頻道、取即時 H.265 影像、查詢錄影、取得歷史錄影串流，並以 VideoToolbox 硬體解碼成畫面。**macOS App（DVR Viewer）已在實體 DVR 上由使用者確認即時畫面與錄影回放正常 → 專案最終驗收標準已達成**（不開 SuperLive Plus、不用 Docker）。錄影下載（MP4，不轉碼）已在兩台實體 DVR 驗證。
 
 協定細節見 `docs/protocol-analysis.md` §0；測試證據見 `docs/test-results.md`。
+
+## 下一版待辦
+
+* ~~appcast 改放 GitHub Releases 附件~~：✅ 0.8 完成（SUFeedURL＝releases/latest/download/appcast.xml；repo 根目錄 appcast.xml 仍需更新給 0.7.2 以前的版本）。
+* 待使用者實際使用確認：16 路同時播（8083）、拖曳頻道、點選不延遲、讀取卡住自動恢復、鑰匙圈更新後只問一次、超過上限提示。
+* 之後可做：自動輪播、全螢幕監看模式、多路同步回放、移動偵測事件清單。
 
 ## Phase 1：研究與協定驗證 — ✅ 完成
 

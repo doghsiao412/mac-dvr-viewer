@@ -10,8 +10,10 @@
 #   2. Sparkle 工具：https://github.com/sparkle-project/Sparkle/releases（解壓後的 bin 資料夾）
 #   3. EdDSA 私鑰在鑰匙圈（帳號 local.dvrviewer.app；換電腦時用 generate_keys --account local.dvrviewer.app -f <備份檔> 匯入）
 #
-# 完成後：commit 並推送（含 appcast.xml），再執行腳本最後印出的 gh release create 指令上傳 DMG。
+# 完成後：commit 並推送（含 appcast.xml），再執行腳本最後印出的 gh release create 指令上傳 DMG 與 appcast.xml。
 # appcast 只放最新版本；更新說明（Markdown）包含 RELEASE_NOTES.md 的完整歷史。
+# 更新網址：0.8 起為 Releases 的 latest/download/appcast.xml（沒有快取延遲）；
+# 0.7.2 以前的版本讀 repo 根目錄的 appcast.xml（raw 網址，快取 5 分鐘），所以兩邊都要更新。
 
 set -euo pipefail
 ver="${1:-}"; build="${2:-}"
@@ -97,4 +99,4 @@ awk -v v="v$ver" 'NR==1 && $0==v {on=1; next} /^v[0-9]/ {on=0} on' RELEASE_NOTES
 echo
 echo "完成：$dmg"
 echo "下一步：commit 並推送（含 appcast.xml、RELEASE_NOTES.md），再執行："
-echo "  gh release create v$ver $dmg --repo $repo --title \"DVR Viewer $ver\" --notes-file dist/notes-$ver.md"
+echo "  gh release create v$ver $dmg appcast.xml --repo $repo --title \"DVR Viewer $ver\" --notes-file dist/notes-$ver.md"

@@ -114,7 +114,10 @@ final class DeviceModel: Identifiable {
 
     static func describe(_ e: Error) -> String {
         if let n = e as? NVMSError { return n.description }
-        if let k = e as? KeychainStore.KeychainError { return k.localizedDescription }
+        if let k = e as? KeychainStore.KeychainError {
+            if case .notFound = k { return "這台 Mac 尚未輸入密碼：在 DVR 名稱上按右鍵 →「編輯…」輸入密碼" }
+            return k.localizedDescription
+        }
         return e.localizedDescription
     }
 

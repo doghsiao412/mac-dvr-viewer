@@ -4,12 +4,18 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.7.2</title>
-      <pubDate>Sat, 31 Oct 2026 03:41:00 GMT</pubDate>
-      <sparkle:version>11</sparkle:version>
-      <sparkle:shortVersionString>0.7.2</sparkle:shortVersionString>
+      <title>DVR Viewer 0.8</title>
+      <pubDate>Sat, 31 Oct 2026 04:41:09 GMT</pubDate>
+      <sparkle:version>12</sparkle:version>
+      <sparkle:shortVersionString>0.8</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.7.2
+      <description sparkle:format="markdown"><![CDATA[v0.8
+
+- 多台 Mac 同步：在設定選一個 iCloud 雲碟、Google 雲端硬碟或 Dropbox 中的資料夾，其他 Mac 選同一個資料夾，就會同步 DVR 清單、頻道名稱與順序、DVR 順序及自訂畫面。
+- 密碼不會同步：在其他 Mac 第一次連線時，於 DVR 名稱上按右鍵 →「編輯…」輸入一次即可。
+- 更新檢查改用 GitHub Releases，發佈新版後可立即檢查到，不再有數分鐘的延遲。
+
+v0.7.2
 
 - 新的更新視窗：找到新版時顯示這一版的更新內容，可選「安裝並重新啟動」「關閉後自動安裝」「暫不更新」。
 - 選「暫不更新」不會下載也不會安裝，之後不再自動提示該版本（仍可從選單「檢查更新…」更新）。
@@ -86,11 +92,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.7.2/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.7.2/DVR-Viewer-0.7.2.dmg" sparkle:edSignature="TZw3DtJspacdytMcrMUJu/c78FMAIIlE8W2kPjTjb0qEzqE2WyJN9fDvEppHq/fLzGq3bZPrLaEkJPAJwG6eDQ==" length="2384701" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.8/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.8/DVR-Viewer-0.8.dmg" sparkle:edSignature="/DtJI/aZGcl0IyLwiTjOXjGXW6m8EEU3hGqyPM/runU92UvhD1kkMyywFX3dUA/jJp7KEMcpLVdB27xkwxu5DA==" length="2426985" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: q1lkkF6s2kvnvzt9VCyvdx/R5oSiulv6qq9KI3hEbsoQ4ZCOMsCmAP46MZU9rOf5aL/sSPOZ+7H3smYELOIQAg==
-length: 6335
+edSignature: C0rZgmd75U3J6II9PZGXiCv0K4oakB/wCcX37NipYrb/d2sJ52zRsN9sy+YNnq4INxWtmumKKG+3cNadK/nTDg==
+length: 6783
 -->
