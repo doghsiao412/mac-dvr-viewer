@@ -106,6 +106,7 @@ final class AppStore {
     }
 
     init() {
+        Notifier.shared.activate()
         devices = DevicePersistence.load().map(DeviceModel.init)
         loadUI()
         devices.forEach { $0.start() }

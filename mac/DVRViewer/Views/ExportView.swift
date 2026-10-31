@@ -2,7 +2,7 @@ import AppKit
 import DVRKit
 import SwiftUI
 
-/// 下載錄影：設定時間範圍與儲存位置，並顯示所有下載工作
+/// 下載錄影：選擇攝影機（可多選）、時間範圍與儲存位置
 struct ExportSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -16,6 +16,8 @@ struct ExportSheet: View {
     @State private var custom = false
     @State private var includeAudio = true
     @State private var folder = ExportManager.defaultFolder
+    /// 要下載的頻道（同一台 DVR，可多選；預設為目前回放的頻道）
+    @State private var selected: Set<String> = []
 
     private let presets = [1, 5, 10, 30, 60]
 
@@ -35,9 +37,35 @@ struct ExportSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             Form {
                 Section {
-                    LabeledContent("攝影機") {
-                        Text("\(device?.config.name ?? "") · \(store.name(of: ref))")
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], alignment: .leading, spacing: 6) {
+                            ForEach(device?.orderedChannels ?? []) { ch in
+                                Toggle(device?.displayName(ch.id) ?? ch.name, isOn: Binding(
+                                    get: { selected.contains(ch.id) },
+                                    set: { if $0 { selected.insert(ch.id) } else { selected.remove(ch.id) } }))
+                                    .toggleStyle(.checkbox)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(.vertical, 2)
                     }
+                    .frame(maxHeight: 130)
+                    HStack {
+                        Button("全選") { selected = Set(device?.orderedChannels.map(\.id) ?? []) }
+                        Button("只選目前頻道") { selected = [ref.channelID] }
+                        Spacer()
+                        Text("已選 \(selected.count) 支").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.link)
+                } header: {
+                    Text("攝影機（\(device?.config.name ?? "")）")
+                } footer: {
+                    if selected.count > ExportManager.perDeviceLimit {
+                        Text("同一台 DVR 同時下載 \(ExportManager.perDeviceLimit) 支，其餘會排隊依序下載，每支存成一個 MP4。")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Section {
                     DatePicker("開始", selection: $start, displayedComponents: [.date, .hourAndMinute])
                         .datePickerStyle(.field)
                     Picker("長度", selection: Binding(get: { custom ? -1 : minutes },
@@ -49,7 +77,7 @@ struct ExportSheet: View {
                         DatePicker("結束", selection: $end, in: start..., displayedComponents: [.date, .hourAndMinute])
                             .datePickerStyle(.field)
                     }
-                    LabeledContent("範圍內有錄影") {
+                    LabeledContent("範圍內有錄影（\(store.name(of: ref))）") {
                         Text(recordedText).foregroundStyle(recordedSeconds > 0 ? Color.secondary : Color.orange)
                     }
                 } header: { Text("時間範圍") } footer: {
@@ -76,12 +104,13 @@ struct ExportSheet: View {
                 Button("開始下載") { startExport() }
                     .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(device == nil || effectiveEnd <= start)
+                    .disabled(device == nil || effectiveEnd <= start || selected.isEmpty)
             }
             .padding(16)
         }
         .frame(width: 520)
         .onAppear {
+            selected = [ref.channelID]
             start = Calendar.current.date(bySetting: .second, value: 0, of: suggestedStart) ?? suggestedStart
             end = start.addingTimeInterval(300)
         }
@@ -107,21 +136,30 @@ struct ExportSheet: View {
     private func startExport() {
         guard let dev = device else { return }
         let e = effectiveEnd
-        let name = ExportManager.suggestedName(device: dev.config.name, channel: store.name(of: ref), start: start, end: e)
-        var url = folder.appending(path: name)
-        // 避免覆蓋既有檔案
-        var n = 2
-        while FileManager.default.fileExists(atPath: url.path) {
-            url = folder.appending(path: name.replacingOccurrences(of: ".mp4", with: "-\(n).mp4"))
-            n += 1
-        }
-        store.exports.start(connection: dev.connection, channelID: ref.channelID,
-                            title: "\(dev.config.name) · \(store.name(of: ref))", start: start, end: e,
-                            mainStream: true, includeAudio: includeAudio, to: url) { job in
-            switch job.state {
-            case .done: store.showToast("下載完成：\(job.url.lastPathComponent)")
-            case .failed(let m): store.showToast("下載失敗：\(m)")
-            default: break
+        Notifier.shared.requestAuthorizationIfNeeded()
+        // 依頻道順序建立下載工作（每支一個 MP4；超過上限的會排隊）
+        for ch in dev.orderedChannels where selected.contains(ch.id) {
+            let r = CameraRef(deviceID: dev.id, channelID: ch.id)
+            let name = ExportManager.suggestedName(device: dev.config.name, channel: store.name(of: r), start: start, end: e)
+            var url = folder.appending(path: name)
+            // 避免覆蓋既有檔案
+            var n = 2
+            while FileManager.default.fileExists(atPath: url.path) {
+                url = folder.appending(path: name.replacingOccurrences(of: ".mp4", with: "-\(n).mp4"))
+                n += 1
+            }
+            store.exports.start(connection: dev.connection, channelID: ch.id,
+                                title: "\(dev.config.name) · \(store.name(of: r))", start: start, end: e,
+                                mainStream: true, includeAudio: includeAudio, to: url) { job in
+                switch job.state {
+                case .done(let detail):
+                    store.showToast("下載完成：\(job.url.lastPathComponent)")
+                    Notifier.shared.downloadFinished(file: job.url, detail: detail)
+                case .failed(let m):
+                    store.showToast("下載失敗：\(m)")
+                    Notifier.shared.downloadFailed(title: job.title, reason: m)
+                default: break
+                }
             }
         }
         // 像 Safari：關閉視窗，下載圖示飛到右上角的下載按鈕
@@ -169,6 +207,9 @@ struct ExportJobRow: View {
                 Text("\(job.start, format: .dateTime.month().day().hour().minute()) – \(job.end, format: .dateTime.hour().minute())")
                     .font(.caption).foregroundStyle(.secondary)
                 switch job.state {
+                case .queued:
+                    Text("排隊中（同一台 DVR 同時最多下載 \(ExportManager.perDeviceLimit) 路）")
+                        .font(.caption2).foregroundStyle(.secondary)
                 case .running:
                     ProgressView(value: job.fraction)
                     Text(progressText).font(.caption2).foregroundStyle(.secondary)
@@ -182,7 +223,7 @@ struct ExportJobRow: View {
             }
             Spacer()
             switch job.state {
-            case .running:
+            case .running, .queued:
                 Button { store.exports.cancel(job) } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.borderless).help("取消下載")
             case .done:
@@ -200,6 +241,7 @@ struct ExportJobRow: View {
 
     private var icon: String {
         switch job.state {
+        case .queued: return "clock"
         case .running: return "arrow.down.circle"
         case .done: return "checkmark.circle.fill"
         case .failed: return "exclamationmark.triangle.fill"
@@ -209,6 +251,7 @@ struct ExportJobRow: View {
 
     private var color: Color {
         switch job.state {
+        case .queued: return .secondary
         case .running: return .accentColor
         case .done: return .green
         case .failed: return .red

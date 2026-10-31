@@ -35,7 +35,8 @@ struct ContentView: View {
                         .font(.callout)
                         .padding(.horizontal, 16).padding(.vertical, 10)
                         .glassEffect(.regular, in: .capsule)
-                        .padding(.bottom, 16)
+                        // 回放時放在底部控制面板上方，不要蓋住按鈕
+                        .padding(.bottom, store.mode == .playback ? 112 : 16)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }

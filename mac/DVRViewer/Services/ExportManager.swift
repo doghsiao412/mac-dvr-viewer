@@ -12,6 +12,7 @@ final class ExportManager {
     @MainActor
     final class Job: Identifiable {
         enum State: Equatable {
+            case queued
             case running
             case done(String)
             case failed(String)
@@ -26,7 +27,7 @@ final class ExportManager {
         var fraction: Double = 0
         var mediaTime: Date?
         var bytes: Int64 = 0
-        var state: State = .running
+        var state: State = .queued
         fileprivate var task: Task<Void, Never>?
 
         init(title: String, url: URL, start: Date, end: Date) {
@@ -36,10 +37,27 @@ final class ExportManager {
             self.end = end
         }
 
-        var isRunning: Bool { state == .running }
+        /// 進行中或排隊中
+        var isRunning: Bool { state == .running || state == .queued }
     }
 
     private(set) var jobs: [Job] = []
+
+    /// 每台 DVR 同時下載的上限：網頁連線（約 6 條）與即時畫面共用，不要佔滿
+    static let perDeviceLimit = 2
+    private var activeByDevice: [ObjectIdentifier: Int] = [:]
+
+    /// 等到這台 DVR 有空位（可被取消）
+    private func acquire(_ key: ObjectIdentifier) async throws {
+        while (activeByDevice[key] ?? 0) >= Self.perDeviceLimit {
+            try await Task.sleep(for: .milliseconds(300))
+        }
+        activeByDevice[key, default: 0] += 1
+    }
+
+    private func release(_ key: ObjectIdentifier) {
+        activeByDevice[key] = max((activeByDevice[key] ?? 1) - 1, 0)
+    }
 
     var runningCount: Int { jobs.filter(\.isRunning).count }
 
@@ -68,8 +86,13 @@ final class ExportManager {
                mainStream: Bool, includeAudio: Bool = true, to url: URL, onFinish: @escaping @MainActor (Job) -> Void) -> Job {
         let job = Job(title: title, url: url, start: start, end: end)
         jobs.insert(job, at: 0)
+        let key = ObjectIdentifier(connection)
         job.task = Task { @MainActor in
             do {
+                try await acquire(key)
+                defer { release(key) }
+                guard job.state == .queued else { return }
+                job.state = .running
                 let r = try await RecordingExporter.export(
                     connection: connection, channelId: channelID, start: start, end: end,
                     mainStream: mainStream, includeAudio: includeAudio, to: url) { [gate = UpdateGate(interval: 0.25)] p in

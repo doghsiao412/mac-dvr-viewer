@@ -229,8 +229,11 @@ struct PlaybackView: View {
                         .keyboardShortcut("=", modifiers: [.command])
                         .disabled(zoom >= RecordTimeline.zoomRange.upperBound)
                 }
-                Button { snapshot() } label: { Image(systemName: "camera") }.help("截圖")
-                Button { showExport = true } label: { Image(systemName: "arrow.down.circle") }
+                Button { snapshot() } label: { Label("截圖", systemImage: "camera") }
+                    .labelStyle(.titleAndIcon)
+                    .help("截圖")
+                Button { showExport = true } label: { Label("下載", systemImage: "arrow.down.circle") }
+                    .labelStyle(.titleAndIcon)
                     .help("下載錄影（⌘D）")
                     .keyboardShortcut("d", modifiers: [.command])
             }
