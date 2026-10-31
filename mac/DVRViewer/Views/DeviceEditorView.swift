@@ -30,7 +30,7 @@ struct DeviceEditorView: View {
                 } header: {
                     Text("DVR 位址")
                 } footer: {
-                    Text("Port 填 DVR 網頁的連接埠。較舊韌體的 DVR 會改用 TVT 私有協定傳送影像，使用「影像服務 Port」（DVR 預設 6036；若路由器轉發成其他 Port，請填外部 Port）。")
+                    Text("Port 填 DVR 網頁的連接埠。「影像服務 Port」是 TVT 私有協定的連接埠（DVR 預設 6036；若路由器轉發成其他 Port，請填外部 Port）：較舊韌體的影像全部走這裡；新韌體同時超過 6 路即時影像時，多出的畫面也會改走這裡。")
                         .foregroundStyle(.secondary)
                 }
                 Section {

@@ -133,3 +133,20 @@
 | 日期 | 測試 | 結果 |
 |---|---|---|
 | 2026-10-31 | `tools/release.sh 0.3 3`：Release 編譯（LSMinimumSystemVersion 26.0）、DMG 驗證、DMG 與 appcast 的 Sparkle 簽章驗證 | ✅ |
+| 2026-10-31 | 8083 主串流回放 5 秒、主串流下載 60 秒（含聲音） | ✅ 回放 H.265 8 fps；MP4 1280×720 8 fps，聲音軌與影像軌同為 64.7 秒 |
+| — | App：下載飛入動畫、固定主串流的回放介面 | ⏳ 待使用者確認 |
+| 2026-10-31 | 開啟 App 自動檢查更新 | ✅ 重新啟動後 Sparkle SULastCheckTime 由 01:16:34 更新為 01:18:20（UTC），已是最新版故未跳視窗 |
+
+## 0.3 之後：即時影像超過 6 路、操作順暢度（實體 DVR）
+
+| 日期 | 測試 | 結果 |
+|---|---|---|
+| 2026-10-31 | `dvrcli muxtest 16`：同一條 WebSocket 送 16 個 `/device/preview/open` | ❌ 只有第 1 個成功，其餘回 536871004 → 此韌體不支援單一 WebSocket 多工 |
+| 2026-10-31 | `querySystemCaps`（8083） | previewMaxWin=25：韌體本身允許 25 路預覽，限制在網頁伺服器的 WebSocket 連線數 |
+| 2026-10-31 | `dvrcli multilive 16`（8083，WebSocket） | ❌ 只有約 6 路成功，其餘 WebSocket 建立失敗（bad server response）＝App 中只能播 6 格的原因 |
+| 2026-10-31 | `dvrcli multilive 16 --private --service-port 6033` | ✅ 16 路皆有影像（15 秒：頻道 2–12 各約 158 幀≈10 fps；13–16 為低幀率攝影機，WebSocket 下也相同） |
+| 2026-10-31 | `dvrcli multilive 16 --service-port 6033`（自動：WebSocket 超過上限改走私有協定） | ✅ 16 路皆有影像 |
+| 2026-10-31 | `dvrcli multiplayer 16 --service-port 6033`（與 App 相同的 LiveStreamPlayer＋解碼） | ✅ 30 秒內 16 路持續解碼，無重連（每 5 秒約 75–80 幀／頻道） |
+| 2026-10-31 | App：下載飛入動畫（改用 Core Animation 子視窗，下載進度每秒更新 4 次） | ✅ 使用者確認流暢 |
+| — | App：16 分割即時影像、側邊欄拖曳到格子、點選格子不延遲 | ⏳ 待使用者確認（8083 設備的「影像服務 Port」已設為 6033） |
+| — | App：所有設備密碼合併成一筆鑰匙圈項目（每次啟動只詢問一次），舊項目自動搬移 | ⏳ 待使用者確認 |

@@ -39,6 +39,10 @@ final class AppStore {
 
     // 錄影下載
     let exports = ExportManager()
+    /// 開始下載時遞增：觸發「飛到右上角」動畫
+    var downloadFlight = 0
+    /// 動畫落地時遞增：工具列下載按鈕彈跳
+    var downloadLanded = 0
 
     // 側邊欄：已收合的設備（記憶於 UserDefaults）
     var collapsedDevices: Set<UUID> = Set(

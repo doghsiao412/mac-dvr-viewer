@@ -21,7 +21,7 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("更新") {
-                    Toggle("自動檢查更新", isOn: $updater.automaticallyChecks)
+                    Toggle("自動檢查更新（開啟 App 時及每天）", isOn: $updater.automaticallyChecks)
                     HStack {
                         Text("目前版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-")")
                             .foregroundStyle(.secondary)

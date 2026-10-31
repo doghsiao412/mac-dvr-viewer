@@ -72,8 +72,9 @@ struct LiveSlotView: View {
                               lineWidth: 2)
         }
         .contentShape(Rectangle())
+        // 單擊立即選取（若用 onTapGesture 會等雙擊判定逾時才觸發，感覺卡頓）
         .onTapGesture(count: 2) { if ref != nil { store.toggleEnlarge(slot) } }
-        .onTapGesture { store.focusedSlot = slot }
+        .simultaneousGesture(TapGesture().onEnded { if store.focusedSlot != slot { store.focusedSlot = slot } })
         .dropDestination(for: String.self) { items, _ in
             guard let t = items.first, let r = CameraRef(token: t) else { return false }
             store.assign(r, to: slot)

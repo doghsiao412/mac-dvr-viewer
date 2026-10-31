@@ -207,30 +207,74 @@ public actor DVRConnection {
         if channels.isEmpty { _ = try await connect() }
         if usesPrivateProtocol {
             guard let ch = channel(channelId) else { throw NVMSError.badXML("找不到頻道") }
-            let c = try await privateSession()
-            let (task, frames) = try await c.openLive(channelGUID: ch.id, chNo: ch.index, streamType: mainStream ? 1 : 2)
-            let audioTask = AudioTaskBox()
-            var ms = MediaStream(frames: frames, acknowledge: { _ in }, setKeyFrameOnly: nil,
-                                 close: {
-                                     if let t = audioTask.take() { await c.closeLiveAudio(channelGUID: ch.id, chNo: ch.index, task: t) }
-                                     await c.closeLive(channelGUID: ch.id, chNo: ch.index, task: task)
-                                 },
-                                 transport: "私有協定")
-            // 聲音：獨立的 0x501／0x502 任務，可在串流中途開關
-            ms.setAudio = { on in
-                if on {
-                    guard audioTask.peek() == nil else { return }
-                    if let t = try? await c.openLiveAudio(channelGUID: ch.id, chNo: ch.index) { audioTask.set(t) }
-                } else if let t = audioTask.take() {
-                    await c.closeLiveAudio(channelGUID: ch.id, chNo: ch.index, task: t)
-                }
-            }
+            return try await openPrivateLive(ch, mainStream: mainStream)
+        }
+        // DVR 的網頁伺服器同時只接受有限條 WebSocket（實測 TD-2716NE-HC 為 6 條），
+        // 超過時改用私有協定（一條 TCP 可同時傳多路，SuperLive Plus 也是如此）。
+        if let cap = webLiveCap, activeWebLive >= cap, let ch = channel(channelId),
+           let ms = try? await openPrivateLiveIfAvailable(ch, mainStream: mainStream) {
             return ms
         }
         let sid = try await sessionId()
-        return try await MediaStream.webSocket(host: host, port: port, sessionId: sid, live: true) { ws in
-            try await ws.openPreview(channelId: channelId, streamIndex: mainStream ? 1 : 2)
+        do {
+            var ms = try await MediaStream.webSocket(host: host, port: port, sessionId: sid, live: true) { ws in
+                try await ws.openPreview(channelId: channelId, streamIndex: mainStream ? 1 : 2)
+            }
+            activeWebLive += 1
+            let inner = ms.close
+            let closed = FlagBox()
+            ms.close = { [weak self] in
+                await inner()
+                if !closed.value { closed.set(); await self?.webLiveClosed() }
+            }
+            return ms
+        } catch {
+            // 連線層級被拒（非 DVR 指令錯誤）→ 視為已達 WebSocket 上限
+            if case NVMSError.device = error { throw error }
+            webLiveCap = max(activeWebLive, 1)
+            if let ch = channel(channelId), let ms = try? await openPrivateLiveIfAvailable(ch, mainStream: mainStream) {
+                return ms
+            }
+            throw NVMSError.transport("DVR 同時影像連線已達上限，且無法連到影像服務 Port \(servicePort)（請在設備設定確認此 Port）")
         }
+    }
+
+    /// 目前開著的 WebSocket 即時串流數與偵測到的上限
+    private var activeWebLive = 0
+    private var webLiveCap: Int?
+    /// 私有協定連不上時，暫停嘗試到此時間（避免每格都等逾時）
+    private var privateRetryAfter: Date?
+
+    private func webLiveClosed() { activeWebLive = max(activeWebLive - 1, 0) }
+
+    private func openPrivateLiveIfAvailable(_ ch: DVRChannel, mainStream: Bool) async throws -> MediaStream {
+        if let t = privateRetryAfter, t > Date() { throw NVMSError.transport("私有協定暫時無法連線") }
+        do { return try await openPrivateLive(ch, mainStream: mainStream) } catch {
+            privateRetryAfter = Date().addingTimeInterval(60)
+            throw error
+        }
+    }
+
+    private func openPrivateLive(_ ch: DVRChannel, mainStream: Bool) async throws -> MediaStream {
+        let c = try await privateSession()
+        let (task, frames) = try await c.openLive(channelGUID: ch.id, chNo: ch.index, streamType: mainStream ? 1 : 2)
+        let audioTask = AudioTaskBox()
+        var ms = MediaStream(frames: frames, acknowledge: { _ in }, setKeyFrameOnly: nil,
+                             close: {
+                                 if let t = audioTask.take() { await c.closeLiveAudio(channelGUID: ch.id, chNo: ch.index, task: t) }
+                                 await c.closeLive(channelGUID: ch.id, chNo: ch.index, task: task)
+                             },
+                             transport: "私有協定")
+        // 聲音：獨立的 0x501／0x502 任務，可在串流中途開關
+        ms.setAudio = { on in
+            if on {
+                guard audioTask.peek() == nil else { return }
+                if let t = try? await c.openLiveAudio(channelGUID: ch.id, chNo: ch.index) { audioTask.set(t) }
+            } else if let t = audioTask.take() {
+                await c.closeLiveAudio(channelGUID: ch.id, chNo: ch.index, task: t)
+            }
+        }
+        return ms
     }
 
     public func openPlayback(channelId: String, start: Date, end: Date, mainStream: Bool,

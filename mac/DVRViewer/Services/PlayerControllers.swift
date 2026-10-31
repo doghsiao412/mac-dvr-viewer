@@ -1,6 +1,7 @@
 import DVRKit
 import Foundation
 import Observation
+import QuartzCore
 
 /// 一個 Live 格子的播放控制：綁定 View 生命週期（`.task` 開始、取消時停止）
 @Observable
@@ -16,7 +17,6 @@ final class LiveTileController {
     private(set) var lastFrameTime: Date?
     private(set) var audioUnsupported = false
     private var player: LiveStreamPlayer?
-    private var timeTicker = 0
     private var wantAudio = false
     private var volume: Float = 0.8
     var onAudioUnsupported: (() -> Void)?
@@ -37,9 +37,11 @@ final class LiveTileController {
         renderer.clear()
         let p = LiveStreamPlayer(connection: connection, channelId: channelID, mainStream: mainStream)
         let r = renderer
+        // 時間顯示只需約每秒更新數次：在解碼執行緒節流，不要每幀都切到主執行緒
+        let gate = UpdateGate(interval: 0.25)
         p.onFrame = { [weak self] pb, t in
             r.enqueue(pb, time: t)
-            Task { @MainActor [weak self] in self?.noteFrame(t) }
+            if gate.pass() { Task { @MainActor [weak self] in self?.lastFrameTime = t } }
         }
         p.onState = { [weak self] s in
             Task { @MainActor [weak self] in
@@ -71,11 +73,6 @@ final class LiveTileController {
         phase = .idle
     }
 
-    private func noteFrame(_ t: Date) {
-        // 降低主執行緒更新頻率：每 5 幀更新一次時間
-        timeTicker += 1
-        if timeTicker % 5 == 0 || lastFrameTime == nil { lastFrameTime = t }
-    }
 }
 
 /// 回放控制
@@ -115,7 +112,11 @@ final class PlaybackController {
             let p = PlaybackStreamPlayer(connection: connection, channelId: channelID, mainStream: mainStream)
             let r = renderer
             p.onFrame = { pb, t in r.enqueue(pb, time: t) }
-            p.onTime = { [weak self] t in Task { @MainActor [weak self] in self?.currentTime = t } }
+            // 目前時間每秒更新約 10 次即可（每幀更新會讓整個回放畫面重繪）
+            let gate = UpdateGate(interval: 0.1)
+            p.onTime = { [weak self] t in
+                if gate.pass() { Task { @MainActor [weak self] in self?.currentTime = t } }
+            }
             p.onState = { [weak self] s in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -167,5 +168,21 @@ final class PlaybackController {
         player = nil
         key = nil
         phase = .idle
+    }
+}
+
+/// 跨執行緒的更新節流：距離上次放行超過 interval 秒才回傳 true
+final class UpdateGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private let interval: CFTimeInterval
+    private var last: CFTimeInterval = 0
+    init(interval: CFTimeInterval) { self.interval = interval }
+    func pass() -> Bool {
+        let now = CACurrentMediaTime()
+        return lock.withLock {
+            if now - last < interval { return false }
+            last = now
+            return true
+        }
     }
 }

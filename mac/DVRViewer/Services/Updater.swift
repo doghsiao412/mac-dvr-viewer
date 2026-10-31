@@ -18,6 +18,18 @@ final class UpdaterModel: ObservableObject {
         cancellable = controller.updater.publisher(for: \.canCheckForUpdates)
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.canCheckForUpdates = $0 }
+        checkOnLaunch()
+    }
+
+    /// 每次開啟 App 都在背景檢查一次（Sparkle 預設只依間隔檢查）；
+    /// 只有發現新版本才會跳出視窗。設定頁關閉「自動檢查更新」則不檢查。
+    private func checkOnLaunch() {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(3))  // 等 App 啟動完成
+            guard let self, self.controller.updater.automaticallyChecksForUpdates,
+                  self.controller.updater.canCheckForUpdates else { return }
+            self.controller.updater.checkForUpdatesInBackground()
+        }
     }
 
     func checkForUpdates() { controller.checkForUpdates(nil) }

@@ -102,27 +102,26 @@ struct SidebarView: View {
         let online = dev.isOnline(ch.id)
         let selected = store.mode == .playback ? store.playbackRef == ref
             : store.slots.prefix(store.layout).contains(ref)
-        Button {
+        // 不用 Button：List 中的 Button 會吃掉滑鼠拖曳，無法拖到即時畫面
+        HStack {
+            Image(systemName: online ? "video.fill" : "video.slash")
+                .foregroundStyle(online ? Color.accentColor : .secondary)
+                .frame(width: 18)
+            Text(dev.displayName(ch.id))
+                .foregroundStyle(online ? .primary : .secondary)
+            Spacer()
+            if selected {
+                Image(systemName: store.mode == .playback ? "checkmark" : "eye")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
             switch store.mode {
             case .live: store.showInLive(ref)
-            case .playback: store.playbackRef = ref
+            case .playback: if store.playbackRef != ref { store.playbackRef = ref }
             }
-        } label: {
-            HStack {
-                Image(systemName: online ? "video.fill" : "video.slash")
-                    .foregroundStyle(online ? Color.accentColor : .secondary)
-                    .frame(width: 18)
-                Text(dev.displayName(ch.id))
-                    .foregroundStyle(online ? .primary : .secondary)
-                Spacer()
-                if selected {
-                    Image(systemName: store.mode == .playback ? "checkmark" : "eye")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .padding(.vertical, 2)
         .listRowBackground(selected ? Color.accentColor.opacity(0.15) : Color.clear)
         .draggable(ref.token) {

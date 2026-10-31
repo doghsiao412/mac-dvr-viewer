@@ -14,7 +14,6 @@ struct ExportSheet: View {
     @State private var end = Date()
     @State private var minutes = 5
     @State private var custom = false
-    @State private var mainStream = false
     @State private var includeAudio = true
     @State private var folder = ExportManager.defaultFolder
 
@@ -58,10 +57,6 @@ struct ExportSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 Section("輸出") {
-                    Picker("畫質", selection: $mainStream) {
-                        Text("子串流（檔案較小）").tag(false)
-                        Text("主串流（高畫質）").tag(true)
-                    }
                     Toggle("包含聲音（轉為 AAC）", isOn: $includeAudio)
                     LabeledContent("儲存位置") {
                         HStack {
@@ -73,11 +68,6 @@ struct ExportSheet: View {
             }
             .formStyle(.grouped)
 
-            if !store.exports.jobs.isEmpty {
-                Divider()
-                ExportJobsList()
-                    .frame(maxHeight: 200)
-            }
 
             HStack {
                 Spacer()
@@ -127,13 +117,16 @@ struct ExportSheet: View {
         }
         store.exports.start(connection: dev.connection, channelID: ref.channelID,
                             title: "\(dev.config.name) · \(store.name(of: ref))", start: start, end: e,
-                            mainStream: mainStream, includeAudio: includeAudio, to: url) { job in
+                            mainStream: true, includeAudio: includeAudio, to: url) { job in
             switch job.state {
             case .done: store.showToast("下載完成：\(job.url.lastPathComponent)")
             case .failed(let m): store.showToast("下載失敗：\(m)")
             default: break
             }
         }
+        // 像 Safari：關閉視窗，下載圖示飛到右上角的下載按鈕
+        store.downloadFlight += 1
+        dismiss()
     }
 }
 
@@ -252,6 +245,7 @@ struct ExportToolbarButton: View {
                 Image(systemName: "arrow.down.circle")
             }
         }
+        .symbolEffect(.bounce, value: store.downloadLanded)
         .help("下載")
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             ExportJobsList()

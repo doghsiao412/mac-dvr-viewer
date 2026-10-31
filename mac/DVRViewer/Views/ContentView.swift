@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
@@ -63,6 +64,15 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                     .help("分割畫面（⌘1–⌘4）")
                 }
+            }
+        }
+        .onChange(of: store.downloadFlight) { _, _ in
+            // 等下載視窗的關閉動畫結束再飛，兩個動畫不要搶同一段時間
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                guard let win = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix("main") == true && $0.isVisible })
+                        ?? NSApp.mainWindow else { return }
+                DownloadFlight.run(in: win) { store.downloadLanded += 1 }
             }
         }
         .sheet(item: $editor) { target in

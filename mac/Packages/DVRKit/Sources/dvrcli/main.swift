@@ -694,6 +694,101 @@ func runAudioScan(host: String, port: Int, user: String, args: Args) async -> In
     return 0
 }
 
+/// 同一條 WebSocket 同時開 N 個頻道的即時影像，依 task_id 統計（驗證 DVR 是否支援多工）
+func runMuxTest(client: NVMSClient, channels: [DVRChannel], seconds: Int) async throws {
+    guard let sid = await client.sessionId else { return }
+    let stream = NVMSStream(host: client.host, port: client.port, sessionId: sid)
+    try await stream.connect()
+    var taskToCh: [String: Int] = [:]
+    for ch in channels {
+        let tid = NVMSStream.newTaskId()
+        taskToCh[tid.uppercased()] = ch.index + 1
+        try await stream.send(url: "/device/preview/open", data: ["task_id": tid, "channel_id": ch.id, "stream_index": 2, "audio": false])
+    }
+    let watchdog = Task { try? await Task.sleep(for: .seconds(seconds + 3)); await stream.cancelSocket() }
+    defer { watchdog.cancel() }
+    var counts: [Int: Int] = [:]
+    var errors: [String] = []
+    let t0 = ContinuousClock.now
+    loop: while ContinuousClock.now - t0 < .seconds(seconds) {
+        switch try await stream.receive() {
+        case .frame(let f):
+            let tid = (f.json["task_id"] as? String ?? "").uppercased()
+            counts[taskToCh[tid] ?? -1, default: 0] += 1
+        case .message(let url, let code, let raw):
+            if let code, code != 0 { errors.append("\(url) code=\(code) \(raw.prefix(120))") }
+        case .closed(let why): print("   ✖ \(why)"); break loop
+        }
+    }
+    for tid in taskToCh.keys {
+        try? await stream.send(url: "/device/preview/close", data: ["task_id": tid])
+    }
+    await stream.close(kind: .live)
+    print("■ 單一 WebSocket、\(channels.count) 個頻道、\(seconds) 秒：")
+    for ch in channels.map({ $0.index + 1 }) { print("   頻道 \(ch)：\(counts[ch] ?? 0) 幀") }
+    if let u = counts[-1] { print("   無法對應 task_id：\(u)") }
+    errors.prefix(5).forEach { print("   ◆ " + $0) }
+}
+
+/// 同時開 N 個即時串流（經 DVRConnection，與 App 相同路徑），統計每個頻道的幀數
+func runMultiLive(conn: DVRConnection, channels: [DVRChannel], seconds: Int) async {
+    let results = await withTaskGroup(of: (Int, Int, String?).self) { g in
+        for ch in channels {
+            g.addTask {
+                do {
+                    let ms = try await conn.openLive(channelId: ch.id, mainStream: false)
+                    var n = 0
+                    let t0 = ContinuousClock.now
+                    let reader = Task { () -> Int in
+                        var c = 0
+                        do { for try await _ in ms.frames { c += 1; if ContinuousClock.now - t0 > .seconds(seconds) { break } } } catch {}
+                        return c
+                    }
+                    try? await Task.sleep(for: .seconds(seconds + 1))
+                    await ms.close()
+                    reader.cancel()
+                    n = await reader.value
+                    return (ch.index + 1, n, nil)
+                } catch { return (ch.index + 1, 0, error.localizedDescription) }
+            }
+        }
+        var r: [(Int, Int, String?)] = []
+        for await x in g { r.append(x) }
+        return r.sorted { $0.0 < $1.0 }
+    }
+    print("■ 同時 \(channels.count) 個即時串流（\(await conn.usesPrivateProtocol ? "私有協定" : "WebSocket")）、\(seconds) 秒：")
+    for (ch, n, e) in results { print("   頻道 \(ch)：\(n) 幀" + (e.map { "  ✖ \($0)" } ?? "")) }
+}
+
+/// 與 App 相同：N 個 LiveStreamPlayer 同時播放，定期列出每個頻道的解碼幀數與狀態
+func runMultiPlayer(conn: DVRConnection, channels: [DVRChannel], seconds: Int) async {
+    final class Stat: @unchecked Sendable {
+        let lock = NSLock(); var frames: [Int: Int] = [:]; var state: [Int: String] = [:]
+    }
+    let st = Stat()
+    var players: [LiveStreamPlayer] = []
+    for ch in channels {
+        let n = ch.index + 1
+        let p = LiveStreamPlayer(connection: conn, channelId: ch.id, mainStream: false)
+        p.onFrame = { _, _ in st.lock.withLock { st.frames[n, default: 0] += 1 } }
+        p.onState = { s in st.lock.withLock { st.state[n] = "\(s)" } }
+        p.start(); players.append(p)
+    }
+    var last: [Int: Int] = [:]
+    for t in stride(from: 5, through: seconds, by: 5) {
+        try? await Task.sleep(for: .seconds(5))
+        let (f, s) = st.lock.withLock { (st.frames, st.state) }
+        let row = channels.map { c -> String in
+            let n = c.index + 1; let d = (f[n] ?? 0) - (last[n] ?? 0)
+            return "\(n):\(d)" + ((s[n] ?? "").contains("playing") ? "" : "[\(s[n] ?? "-")]")
+        }
+        last = f
+        print("t=\(t)s " + row.joined(separator: " "))
+    }
+    players.forEach { $0.stop() }
+    try? await Task.sleep(for: .seconds(1))
+}
+
 func dayRange(_ day: String) -> (String, String, Date)? {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
@@ -720,6 +815,26 @@ func run() async -> Int32 {
     let host = args.positional[0], user = args.positional[2], cmd = args.positional[3]
     devPort = port
     let rest = Array(args.positional.dropFirst(4))
+    if cmd == "multiplayer" {
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
+        do {
+            let chls = try await conn.connect()
+            await runMultiPlayer(conn: conn, channels: Array(chls.prefix(Int(rest.first ?? "16") ?? 16)), seconds: args.int("seconds", 30))
+        } catch { print("✖ \(error.localizedDescription)"); return 1 }
+        await conn.disconnect()
+        return 0
+    }
+    if cmd == "multilive" {
+        // multilive <N> [--private --service-port P --seconds S]
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036)) { try devPassword(user: user, host: host) }
+        if args.bool("private") { await conn.setForcePrivateProtocol(true) }
+        do {
+            let chls = try await conn.connect()
+            await runMultiLive(conn: conn, channels: Array(chls.prefix(Int(rest.first ?? "9") ?? 9)), seconds: args.int("seconds", 5))
+        } catch { print("✖ \(error.localizedDescription)"); return 1 }
+        await conn.disconnect()
+        return 0
+    }
     if cmd == "audioscan" { return await runAudioScan(host: host, port: port, user: user, args: args) }
     if cmd == "audiotest" {
         return await runAudioTest(host: host, port: port, user: user, rest: rest, args: args)
@@ -808,6 +923,10 @@ func run() async -> Int32 {
             let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"
             guard let st = f.date(from: rest[1]) else { exitCode = 1; break }
             try await runPlaybackAudioProbe(client: client, channel: c, start: st, seconds: args.int("seconds", 4))
+
+        case "muxtest":
+            let n = Int(rest.first ?? "9") ?? 9
+            try await runMuxTest(client: client, channels: Array(chls.prefix(n)), seconds: args.int("seconds", 5))
 
         case "audioprobe":
             guard let c = channel(rest.first) else { print("找不到頻道"); exitCode = 1; break }

@@ -10,7 +10,8 @@ struct PlaybackView: View {
     @State private var rangeError: String?
     @State private var nearby: (before: Date?, after: Date?) = (nil, nil)
     @State private var zoom: Double = 6  // 預設顯示 4 小時
-    @State private var mainStream = false
+    /// 回放固定使用主串流（錄影本身即主串流；實測主子串流幀率相同）
+    private let mainStream = true
     @State private var aspect: VideoAspect = .fit
     @State private var showExport = false
 
@@ -210,13 +211,6 @@ struct PlaybackView: View {
                 .frame(width: 90)
                 .help("播放速度（>4× 只顯示關鍵幀）")
                 Spacer()
-                Picker("串流", selection: $mainStream) {
-                    Text("子串流").tag(false)
-                    Text("主串流").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 140)
-                .onChange(of: mainStream) { _, _ in if let t = controller.currentTime { startOrSeek(t, reopen: true) } }
                 HStack(spacing: 6) {
                     Button { zoomBy(1 / 2) } label: { Image(systemName: "minus.magnifyingglass") }
                         .help("縮小時間軸（⌘－）")

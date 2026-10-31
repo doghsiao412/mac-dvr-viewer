@@ -4,12 +4,22 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.3</title>
-      <pubDate>Sat, 31 Oct 2026 01:13:46 GMT</pubDate>
-      <sparkle:version>3</sparkle:version>
-      <sparkle:shortVersionString>0.3</sparkle:shortVersionString>
+      <title>DVR Viewer 0.4</title>
+      <pubDate>Sat, 31 Oct 2026 01:51:09 GMT</pubDate>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>0.4</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.3
+      <description sparkle:format="markdown"><![CDATA[v0.4
+
+- 即時影像可同時播放超過 6 路：DVR 網頁連線數達上限時，多出的畫面自動改走 TVT 私有協定（需在設備設定填入正確的「影像服務 Port」）。
+- 密碼改為存在同一筆鑰匙圈項目：App 更新後只會詢問一次鑰匙圈權限，不再每台 DVR 各問一次（舊項目自動搬移）。
+- 可從左側頻道拖曳到即時畫面的格子。
+- 點選畫面格子立即反應，並降低即時與回放畫面的重繪頻率，操作更順暢。
+- 下載改為像 Safari：按下載後圖示飛到右上角的下載按鈕，下載清單從該按鈕查看；預設存到「下載項目」。
+- 回放與下載固定使用主串流，移除主／子串流選項。
+- 開啟 App 時自動檢查更新。
+
+v0.3
 
 - 錄影下載包含聲音：聲音轉為 AAC 與影像一起存成 MP4，下載視窗可選擇是否包含聲音。
 - 下載時錄影中斷的空檔自動略過，聲音與影像保持對齊。
@@ -33,11 +43,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.3/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.3/DVR-Viewer-0.3.dmg" sparkle:edSignature="oJS5jJ5TW9YhVBy2XsuVSzbAipM6Ru+uZHvWLDN9tl4snXzysk2rqUyfH9gG6yZPDQO8bgEtRtfyEYOScd9RBQ==" length="2214215" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.4/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.4/DVR-Viewer-0.4.dmg" sparkle:edSignature="Z+HtBNXQqJ3PT9FRvCbnkoMhSGHcK/6A7f6U0Q9FuqqV/LVccTRKE6Ly+7ug9kFwqYgz39M1GCQihGaZAUZQDA==" length="2230250" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 9dseVsNLQIRqDVc8gcbFARgIYvdoto0m3nVKrKsTc97wdJS2zhxQrIHT5aYQyN5f22K9afmf9DbyWitqmxNhCg==
-length: 2839
+edSignature: V0N06P20pPDx0UNeEIWsa4N4dkknRi4ehDcH7miZdpMTqMBD2b2/OCP5X8BzIMfD737A2bfW5xBq6vXaj/JLCQ==
+length: 3601
 -->

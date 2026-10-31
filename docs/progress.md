@@ -51,6 +51,9 @@
 - [x] Sparkle 2.10.0 自動更新（appcast：repo 根目錄 `appcast.xml`；EdDSA 私鑰在開發者鑰匙圈 `local.dvrviewer.app`；`tools/release.sh` 發佈流程）、改以 DMG 發佈
 - [x] 錄影下載含聲音：G.711 → PCM → AAC（8 kHz 單聲道），聲音晚到時先暫存影像（最多 8 秒）再決定是否建聲音軌；交錯寫入、補靜音避免 AVAssetWriter 互等卡死
 - [x] 最低版本改為 macOS 26（App 與 DVRKit；Package tools 6.2）
+- [x] 下載預設存到「下載項目」；下載視窗不再顯示清單，開始後關閉並有圖示以弧線飛到右上角下載按鈕（類似 Safari），按鈕彈跳
+- [x] 開啟 App 時自動在背景檢查更新（SUEnableAutomaticChecks=YES、啟動 3 秒後 checkForUpdatesInBackground；設定頁可關閉）
+- [x] 回放與下載固定主串流（移除子／主切換；實測 8083 主串流回放 8 fps、下載正常；私有協定回放本來就不分）
 - [x] 介面 Liquid Glass：回放影像滿版＋浮動玻璃面板（上方頻道／日期、下方時間軸與控制）、畫面格玻璃名稱列與玻璃圓形按鈕（GlassEffectContainer）、玻璃狀態提示與 toast、主要按鈕 glassProminent
 - [ ] 多頻道同步回放、事件書籤
 - [x] App 圖示（程式繪製：攝影機＋錄影燈＋時間軸）、Release 打包 **v0.1**（arm64、ad-hoc 簽章、未公證）→ GitHub Release
@@ -72,6 +75,8 @@
 | 2026-10-31 | 自動更新採 Sparkle 2.10.0（SPM，exactVersion），appcast 放 GitHub raw、DMG 放 Release | 主流開源方案；選發佈超過兩週的版本（2.10.1 僅 6 天）；App 未公證，靠 EdDSA 簽章確保更新檔完整 |
 | 2026-10-31 | 最低版本 macOS 26 | 使用 Liquid Glass API（glassEffect、GlassEffectContainer、.glass 按鈕） |
 | 2026-10-31 | 下載的聲音轉 AAC（不保留 G.711） | MP4 不支援 G.711；AVAssetWriter 內建 AAC 編碼，相容性最好 |
+| 2026-10-31 | 新韌體即時影像超過 WebSocket 上限（實測 6 條）時，多出的畫面自動改走私有協定 | 同一條 WebSocket 無法多工（536871004）；私有協定一條 TCP 可傳多路（SuperLive Plus 同樣做法），實測 16 路正常 |
+| 2026-10-31 | 所有設備密碼存成同一筆鑰匙圈項目，啟動後只讀一次並快取於記憶體 | ad-hoc 簽章每次更新／編譯都會改變，macOS 會對每筆項目重新詢問；DVR 多時無法使用 |
 | 2026-10-31 | 顯示使用 VideoToolbox 解碼 → AVSampleBufferDisplayLayer（DisplayImmediately） | 同一份解碼結果可直接截圖；回放節奏由 PlaybackStreamPlayer 依 FILETIME 控制 |
 
 ## 安全注意

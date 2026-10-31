@@ -50,11 +50,9 @@ final class ExportManager {
         return r.map(\.fraction).reduce(0, +) / Double(r.count)
     }
 
+    /// 預設存到「下載項目」
     static var defaultFolder: URL {
-        let dir = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
-            .appending(path: "DVR Viewer", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
+        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
     }
 
     static func suggestedName(device: String, channel: String, start: Date, end: Date) -> String {
@@ -74,7 +72,9 @@ final class ExportManager {
             do {
                 let r = try await RecordingExporter.export(
                     connection: connection, channelId: channelID, start: start, end: end,
-                    mainStream: mainStream, includeAudio: includeAudio, to: url) { p in
+                    mainStream: mainStream, includeAudio: includeAudio, to: url) { [gate = UpdateGate(interval: 0.25)] p in
+                    // 下載比即時快很多（每秒數百幀）：進度每秒更新 4 次即可，避免主執行緒忙碌造成動畫掉幀
+                    guard gate.pass() else { return }
                     Task { @MainActor in
                         guard job.isRunning else { return }
                         job.fraction = p.fraction

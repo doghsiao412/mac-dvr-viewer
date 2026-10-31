@@ -8,7 +8,7 @@ public struct MediaStream: Sendable {
     public let acknowledge: @Sendable (Int) async -> Void
     /// 只送關鍵幀（快轉）；不支援時為 nil
     public let setKeyFrameOnly: (@Sendable (Bool, Date) async -> Void)?
-    public let close: @Sendable () async -> Void
+    public var close: @Sendable () async -> Void
     /// 底層方式（顯示用）
     public let transport: String
     /// 開關聲音；nil 表示需在開啟串流時指定（私有協定）
