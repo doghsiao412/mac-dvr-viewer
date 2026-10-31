@@ -4,12 +4,19 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.7.1</title>
-      <pubDate>Sat, 31 Oct 2026 03:23:47 GMT</pubDate>
-      <sparkle:version>10</sparkle:version>
-      <sparkle:shortVersionString>0.7.1</sparkle:shortVersionString>
+      <title>DVR Viewer 0.7.2</title>
+      <pubDate>Sat, 31 Oct 2026 03:41:00 GMT</pubDate>
+      <sparkle:version>11</sparkle:version>
+      <sparkle:shortVersionString>0.7.2</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.7.1
+      <description sparkle:format="markdown"><![CDATA[v0.7.2
+
+- 新的更新視窗：找到新版時顯示這一版的更新內容，可選「安裝並重新啟動」「關閉後自動安裝」「暫不更新」。
+- 選「暫不更新」不會下載也不會安裝，之後不再自動提示該版本（仍可從選單「檢查更新…」更新）。
+- 選「關閉後自動安裝」的話，下次開啟 App 會提示已更新與更新內容。
+- 手動檢查更新時，已是最新版本或無法連線也會顯示提示。
+
+v0.7.1
 
 - 開啟 App 時找到新版本會跳出更新視窗，由使用者決定是否更新（不再於背景自動下載安裝）。
 
@@ -79,11 +86,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.7.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.7.1/DVR-Viewer-0.7.1.dmg" sparkle:edSignature="ZoS33j1tcMWOvUJIKiH6o5mWW8t+vFzc0Mcul3xF2cMVsMAVpiZoFSdT8sLQQSHQ8NBTIbP7GR2CWEyc1ljoBg==" length="2373839" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.7.2/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.7.2/DVR-Viewer-0.7.2.dmg" sparkle:edSignature="TZw3DtJspacdytMcrMUJu/c78FMAIIlE8W2kPjTjb0qEzqE2WyJN9fDvEppHq/fLzGq3bZPrLaEkJPAJwG6eDQ==" length="2384701" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 6zvNzJc4Ju7RjLf92/uMK7sCSCALBUjXSP/BWp5kElC4WHWzi2qPyR7nvsk6Q7A3SMfSAgAXhiH/m7Fmo+oWBw==
-length: 5859
+edSignature: q1lkkF6s2kvnvzt9VCyvdx/R5oSiulv6qq9KI3hEbsoQ4ZCOMsCmAP46MZU9rOf5aL/sSPOZ+7H3smYELOIQAg==
+length: 6335
 -->
