@@ -26,11 +26,11 @@ struct DeviceEditorView: View {
                     TextField("名稱", text: $name, prompt: Text("例如：公司 DVR"))
                     TextField("IP 或主機名稱", text: $host, prompt: Text("192.168.1.100 或 mydvr.ddns.net"))
                     TextField("Port（網頁連接埠）", text: $port)
-                    TextField("影像服務 Port", text: $servicePort)
+                    TextField("影像服務 Port（非必要不需修改）", text: $servicePort)
                 } header: {
                     Text("DVR 位址")
                 } footer: {
-                    Text("Port 填 DVR 網頁的連接埠。「影像服務 Port」是 TVT 私有協定的連接埠（DVR 預設 6036；若路由器轉發成其他 Port，請填外部 Port）：較舊韌體的影像全部走這裡；新韌體同時超過 6 路即時影像時，多出的畫面也會改走這裡。")
+                    Text("Port 填 DVR 網頁的連接埠即可。「影像服務 Port」非必要不需修改，保持 6036；只有較舊韌體的 DVR，或想同時看超過 6 路即時影像時才會用到。若路由器把它轉發成其他 Port，再填外部 Port。")
                         .foregroundStyle(.secondary)
                 }
                 Section {

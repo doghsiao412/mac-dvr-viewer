@@ -5,8 +5,6 @@ struct SidebarView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.openWindow) private var openWindow
     @Binding var editor: DeviceEditorTarget?
-    @State private var renaming: CameraRef?
-    @State private var renameText = ""
     @State private var removing: DeviceModel?
 
     var body: some View {
@@ -32,12 +30,6 @@ struct SidebarView: View {
                 Button { editor = .new } label: { Label("加入 DVR", systemImage: "plus") }
                     .help("加入 DVR")
             }
-        }
-        .alert("重新命名頻道", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("名稱", text: $renameText)
-            Button("儲存") { if let r = renaming { store.rename(r, to: renameText) }; renaming = nil }
-            Button("恢復預設名稱") { if let r = renaming { store.rename(r, to: "") }; renaming = nil }
-            Button("取消", role: .cancel) { renaming = nil }
         }
         .confirmationDialog("移除這台 DVR？", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             presenting: removing) { dev in
@@ -68,13 +60,7 @@ struct SidebarView: View {
             Button("全部收合") { store.setAllExpanded(false) }
             Button("全部展開") { store.setAllExpanded(true) }
             Divider()
-            Button("全部放入即時畫面") {
-                let chs = dev.orderedChannels
-                let n = chs.count <= 1 ? 1 : chs.count <= 4 ? 4 : chs.count <= 9 ? 9 : 16
-                store.setLayout(n)
-                for (i, c) in chs.prefix(n).enumerated() { store.slots[i] = CameraRef(deviceID: dev.id, channelID: c.id) }
-                store.mode = .live
-            }
+            Button("整個畫面切到這台") { store.switchTo(dev.id) }
             Divider()
             Button("移除…", role: .destructive) { removing = dev }
         }
@@ -101,7 +87,7 @@ struct SidebarView: View {
         let ref = CameraRef(deviceID: dev.id, channelID: ch.id)
         let online = dev.isOnline(ch.id)
         let selected = store.mode == .playback ? store.playbackRef == ref
-            : store.slots.prefix(store.layout).contains(ref)
+            : store.gridSlots.prefix(store.gridLayout).contains(ref)
         // 不用 Button：List 中的 Button 會吃掉滑鼠拖曳，無法拖到即時畫面
         HStack {
             Image(systemName: online ? "video.fill" : "video.slash")
@@ -122,6 +108,8 @@ struct SidebarView: View {
             case .playback: if store.playbackRef != ref { store.playbackRef = ref }
             }
         }
+        // 雙擊重新命名（單擊照常立即生效，不會被延遲）
+        .simultaneousGesture(TapGesture(count: 2).onEnded { store.renaming = ref })
         .padding(.vertical, 2)
         .listRowBackground(selected ? Color.accentColor.opacity(0.15) : Color.clear)
         .draggable(ref.token) {
@@ -137,7 +125,7 @@ struct SidebarView: View {
             Button("回放錄影") { store.mode = .playback; store.playbackRef = ref }
             Button("在新視窗開啟") { openWindow(id: "camera", value: ref) }
             Divider()
-            Button("重新命名…") { renameText = dev.displayName(ch.id); renaming = ref }
+            Button("重新命名…") { store.renaming = ref }
         }
     }
 }

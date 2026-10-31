@@ -50,6 +50,22 @@ struct DVRCommands: Commands {
             Divider()
             Button("放大／還原選取的畫面") { store.toggleEnlarge(store.focusedSlot) }
                 .keyboardShortcut(.return, modifiers: [.command])
+            Divider()
+            Button("上一頁") { store.changePage(by: -1) }
+                .keyboardShortcut("[", modifiers: [.command])
+            Button("下一頁") { store.changePage(by: 1) }
+                .keyboardShortcut("]", modifiers: [.command])
+            Divider()
+            Button("自訂畫面") { store.switchToCustom() }
+                .keyboardShortcut("0", modifiers: [.command, .option])
+            Button("上一台 DVR") { store.switchDevice(by: -1) }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+            Button("下一台 DVR") { store.switchDevice(by: 1) }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+            ForEach(Array(store.devices.prefix(9).enumerated()), id: \.element.id) { i, dev in
+                Button("切到「\(dev.config.name)」") { store.switchTo(dev.id) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .option])
+            }
         }
     }
 }

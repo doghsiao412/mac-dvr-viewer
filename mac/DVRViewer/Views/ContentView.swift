@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppStore.self) private var store
     @State private var editor: DeviceEditorTarget?
+    @State private var renameText = ""
 
     var body: some View {
         @Bindable var store = store
@@ -41,6 +42,9 @@ struct ContentView: View {
             .animation(.snappy, value: store.toast)
         }
         .toolbar {
+            if !store.devices.isEmpty {
+                ToolbarItem(placement: .navigation) { DeviceSwitcher() }
+            }
             if !store.exports.jobs.isEmpty {
                 ToolbarItem(placement: .primaryAction) { ExportToolbarButton() }
             }
@@ -55,7 +59,7 @@ struct ContentView: View {
             }
             if store.mode == .live {
                 ToolbarItem(placement: .primaryAction) {
-                    Picker("分割", selection: Binding(get: { store.layout }, set: { store.setLayout($0) })) {
+                    Picker("分割", selection: Binding(get: { store.gridLayout }, set: { store.setLayout($0) })) {
                         Label("1", systemImage: "square").tag(1)
                         Label("4", systemImage: "square.grid.2x2").tag(4)
                         Label("9", systemImage: "square.grid.3x3").tag(9)
@@ -75,6 +79,17 @@ struct ContentView: View {
                 DownloadFlight.run(in: win) { store.downloadLanded += 1 }
             }
         }
+        .alert("重新命名頻道", isPresented: Binding(get: { store.renaming != nil }, set: { if !$0 { store.renaming = nil } })) {
+            TextField("名稱", text: $renameText)
+            Button("儲存") { if let r = store.renaming { store.rename(r, to: renameText) }; store.renaming = nil }
+            Button("恢復預設名稱") { if let r = store.renaming { store.rename(r, to: "") }; store.renaming = nil }
+            Button("取消", role: .cancel) { store.renaming = nil }
+        } message: {
+            Text("名稱只存在本 App，不會修改 DVR 的設定。")
+        }
+        .onChange(of: store.renaming) { _, r in
+            if let r { renameText = store.name(of: r) }
+        }
         .sheet(item: $editor) { target in
             DeviceEditorView(target: target)
         }
@@ -90,5 +105,38 @@ enum DeviceEditorTarget: Identifiable {
         case .new: return "new"
         case .edit(let c): return c.id.uuidString
         }
+    }
+}
+
+/// 工具列：切換即時畫面要看的 DVR，或自訂畫面
+struct DeviceSwitcher: View {
+    @Environment(AppStore.self) private var store
+
+    var body: some View {
+        let current = store.currentDeviceID
+        Menu {
+            if store.mode == .live {
+                Button {
+                    store.switchToCustom()
+                } label: {
+                    if current == nil { Label("自訂畫面", systemImage: "checkmark") } else { Text("自訂畫面") }
+                }
+                Divider()
+            }
+            ForEach(store.devices) { dev in
+                Button {
+                    store.switchTo(dev.id)
+                } label: {
+                    if dev.id == current { Label(dev.config.name, systemImage: "checkmark") } else { Text(dev.config.name) }
+                }
+            }
+        } label: {
+            if let c = current.flatMap({ store.device($0) }) {
+                Label(c.config.name, systemImage: "server.rack").labelStyle(.titleAndIcon)
+            } else {
+                Label("自訂畫面", systemImage: "square.grid.2x2").labelStyle(.titleAndIcon)
+            }
+        }
+        .help("DVR 畫面顯示整台 DVR 的所有頻道；自訂畫面可從左側自選頻道（⌥⌘0 自訂、⌥⌘1–⌥⌘9 DVR、⌥⌘←／→ 上一台／下一台）")
     }
 }

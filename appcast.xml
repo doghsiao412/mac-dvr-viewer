@@ -4,12 +4,21 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 0.4.1</title>
-      <pubDate>Sat, 31 Oct 2026 02:01:25 GMT</pubDate>
-      <sparkle:version>5</sparkle:version>
-      <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
+      <title>DVR Viewer 0.5</title>
+      <pubDate>Sat, 31 Oct 2026 02:24:57 GMT</pubDate>
+      <sparkle:version>6</sparkle:version>
+      <sparkle:shortVersionString>0.5</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v0.4.1
+      <description sparkle:format="markdown"><![CDATA[v0.5
+
+- 新增「DVR 畫面」：工具列左上角選擇 DVR，即可顯示整台 DVR 的所有頻道（依左側順序、不可修改）；可選 1／4／9／16 分割，頻道較多時以換頁瀏覽（⌘[／⌘]）。
+- 原本可自由排列的畫面改名為「自訂畫面」，可從左側點選或拖曳任何 DVR 的頻道。
+- 切換快速鍵：⌥⌘0 自訂畫面、⌥⌘1–9 第幾台 DVR、⌥⌘←／→ 上一台／下一台；錄影回放時切換 DVR 會停在同一個頻道編號與日期。
+- 頻道重新命名更容易找到：側邊欄雙擊頻道，或在即時畫面的格子上按右鍵（名稱只存在 App，不會修改 DVR）。
+- 雙擊放大畫面後，左上角有返回按鈕。
+- 設備設定的「影像服務 Port」標示為非必要不需修改。
+
+v0.4.1
 
 - 回放時間軸的播放位置與時間標籤改為深紅色，文字更容易閱讀。
 
@@ -47,11 +56,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.4.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.4.1/DVR-Viewer-0.4.1.dmg" sparkle:edSignature="5qbx5t5uhln1n4NJseOMdqSgJu7CCLaX6d0Vgxly9dYNBAqtaEK3xULnfvFR8CD7mTCvgS54ctcw+jBpQS8QBQ==" length="2231167" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v0.5/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v0.5/DVR-Viewer-0.5.dmg" sparkle:edSignature="oU6bNWjCwIQl1+wkQu4yoTG1KkfM/UaWrFqmssNt1skDFe8w2nI1WEZqgGU9s28kHtXlUy55dl1dfT9UtVvDAw==" length="2265646" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Hbns7bLUInKJ1CKO5WZqnJflzLJ/SZjHAXOXF+QFtUpc24JV54VZhL6EyTbGxcCUbWaLk4AMpKD96/x7e4p4Cw==
-length: 3710
+edSignature: G+hKSd67k0FUIDk+gHS9roxvjsY0WH6QTl5PkSpog0y8j7ClaAAQxGWM/KWj3oEWYKSer0YcQ7vBnA0B89YADA==
+length: 4494
 -->

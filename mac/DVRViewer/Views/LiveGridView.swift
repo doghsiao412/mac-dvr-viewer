@@ -10,8 +10,20 @@ struct LiveGridView: View {
             if let big = store.enlargedSlot {
                 LiveSlotView(slot: big)
                     .padding(2)
+                    .overlay(alignment: .topLeading) {
+                        Button { store.toggleEnlarge(big) } label: {
+                            Image(systemName: "chevron.backward")
+                                .font(.body.weight(.semibold))
+                                .frame(width: 22, height: 22)
+                        }
+                        .buttonStyle(.glass)
+                        .buttonBorderShape(.circle)
+                        .controlSize(.large)
+                        .help("返回分割畫面（也可再雙擊畫面）")
+                        .padding(12)
+                    }
             } else {
-                let n = Int(Double(store.layout).squareRoot())
+                let n = Int(Double(store.gridLayout).squareRoot())
                 let w = (geo.size.width - CGFloat(n + 1) * 2) / CGFloat(n)
                 let h = (geo.size.height - CGFloat(n + 1) * 2) / CGFloat(n)
                 Grid(horizontalSpacing: 2, verticalSpacing: 2) {
@@ -28,17 +40,41 @@ struct LiveGridView: View {
             }
         }
         .background(Color.black)
+        .overlay(alignment: .bottom) {
+            if store.pageCount > 1 && store.enlargedSlot == nil { PageControl() }
+        }
         .focusable()
         .focusEffectDisabled()
         .focused($gridFocused)
         .simultaneousGesture(TapGesture().onEnded { gridFocused = true })
         .onKeyPress(keys: [.delete, .deleteForward]) { _ in
             let slot = store.enlargedSlot ?? store.focusedSlot
-            guard store.slots.indices.contains(slot), store.slots[slot] != nil else { return .ignored }
+            guard store.isCustomLive, store.slots.indices.contains(slot), store.slots[slot] != nil else { return .ignored }
             store.clear(slot: slot)
             return .handled
         }
         .onAppear { gridFocused = true }
+    }
+}
+
+/// DVR 畫面的換頁控制（頻道數超過分割數時顯示）
+struct PageControl: View {
+    @Environment(AppStore.self) private var store
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button { store.changePage(by: -1) } label: { Image(systemName: "chevron.left").frame(width: 20, height: 20) }
+                .help("上一頁（⌘[）")
+            Text("\(store.dvrPage + 1) / \(store.pageCount)")
+                .font(.callout.monospacedDigit().weight(.medium))
+                .frame(minWidth: 48)
+            Button { store.changePage(by: 1) } label: { Image(systemName: "chevron.right").frame(width: 20, height: 20) }
+                .help("下一頁（⌘]）")
+        }
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .glassEffect(.regular, in: .capsule)
+        .padding(.bottom, 12)
     }
 }
 
@@ -50,7 +86,7 @@ struct LiveSlotView: View {
     @State private var dropTargeted = false
 
     var body: some View {
-        let ref = store.slots[slot]
+        let ref = store.gridSlots[slot]
         ZStack {
             if let ref, let dev = store.device(ref.deviceID) {
                 VideoTile(ref: ref, device: dev, mainStream: store.wantsMainStream(slot: slot),
@@ -58,8 +94,10 @@ struct LiveSlotView: View {
                     .contextMenu { menu(ref) }
             } else {
                 VStack(spacing: 6) {
-                    Image(systemName: "plus.viewfinder").font(.title2)
-                    Text("點選左側頻道或拖曳到這裡").font(.caption)
+                    if store.isCustomLive {
+                        Image(systemName: "plus.viewfinder").font(.title2)
+                        Text("點選左側頻道或拖曳到這裡").font(.caption)
+                    }
                 }
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -68,7 +106,7 @@ struct LiveSlotView: View {
         }
         .overlay {
             Rectangle()
-                .strokeBorder(dropTargeted ? Color.accentColor : (store.focusedSlot == slot && store.layout > 1 ? Color.accentColor.opacity(0.8) : .clear),
+                .strokeBorder(dropTargeted ? Color.accentColor : (store.focusedSlot == slot && store.gridLayout > 1 ? Color.accentColor.opacity(0.8) : .clear),
                               lineWidth: 2)
         }
         .contentShape(Rectangle())
@@ -76,16 +114,17 @@ struct LiveSlotView: View {
         .onTapGesture(count: 2) { if ref != nil { store.toggleEnlarge(slot) } }
         .simultaneousGesture(TapGesture().onEnded { if store.focusedSlot != slot { store.focusedSlot = slot } })
         .dropDestination(for: String.self) { items, _ in
-            guard let t = items.first, let r = CameraRef(token: t) else { return false }
+            guard store.isCustomLive, let t = items.first, let r = CameraRef(token: t) else { return false }
             store.assign(r, to: slot)
             return true
-        } isTargeted: { dropTargeted = $0 }
+        } isTargeted: { dropTargeted = $0 && store.isCustomLive }
     }
 
     @ViewBuilder
     private func menu(_ ref: CameraRef) -> some View {
         Button(store.enlargedSlot == slot ? "還原分割畫面" : "放大") { store.toggleEnlarge(slot) }
         Button("在新視窗開啟") { openWindow(id: "camera", value: ref) }
+        Button("重新命名…") { store.renaming = ref }
         Divider()
         Picker("串流", selection: Binding(get: { store.wantsMainStream(slot: slot) },
                                         set: { store.slotMainStream[slot] = $0 })) {
@@ -98,7 +137,9 @@ struct LiveSlotView: View {
         }
         Divider()
         Button("回放此頻道錄影") { store.playbackRef = ref; store.mode = .playback }
-        Button("從畫面移除") { store.clear(slot: slot) }
-            .keyboardShortcut(.delete, modifiers: [])
+        if store.isCustomLive {
+            Button("從畫面移除") { store.clear(slot: slot) }
+                .keyboardShortcut(.delete, modifiers: [])
+        }
     }
 }

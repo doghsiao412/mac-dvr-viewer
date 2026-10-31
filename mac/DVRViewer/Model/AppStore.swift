@@ -96,6 +96,7 @@ final class AppStore {
         KeychainStore.deletePassword(for: id)
         slots = slots.map { $0?.deviceID == id ? nil : $0 }
         if playbackRef?.deviceID == id { playbackRef = nil }
+        if liveDeviceID == id { liveDeviceID = nil }
         persistDevices()
     }
 
@@ -121,6 +122,99 @@ final class AppStore {
         persistDevices()
     }
 
+    /// 正在重新命名的頻道（側邊欄雙擊、右鍵、即時畫面右鍵都會設定；對話框在主視窗）
+    var renaming: CameraRef?
+
+    // MARK: - 切換 DVR
+
+    /// 即時畫面目前顯示的 DVR（nil＝自訂畫面）。
+    /// DVR 畫面：依側邊欄順序顯示該 DVR 的所有頻道，格子內容不能修改。
+    /// 自訂畫面：`slots`／`layout`，由使用者從左側自行加入。
+    var liveDeviceID: UUID? {
+        didSet {
+            guard liveDeviceID != oldValue else { return }
+            enlargedSlot = nil
+            focusedSlot = 0
+            dvrPage = 0
+            audioRef = nil
+            saveUI()
+        }
+    }
+
+    var isCustomLive: Bool { liveDeviceID == nil }
+
+    /// 目前畫面上的 DVR：即時＝DVR 畫面的設備（自訂畫面為 nil）；回放＝目前回放的設備
+    var currentDeviceID: UUID? {
+        mode == .playback ? playbackRef?.deviceID : liveDeviceID
+    }
+
+    /// DVR 畫面的分割數（可選 1／4／9／16，頻道超過時分頁）與目前頁碼
+    var dvrLayout: Int = (UserDefaults.standard.object(forKey: "dvrLayout") as? Int) ?? 16 {
+        didSet { UserDefaults.standard.set(dvrLayout, forKey: "dvrLayout") }
+    }
+    var dvrPage = 0
+
+    private var liveDeviceChannels: [DVRChannel] {
+        liveDeviceID.flatMap { device($0) }?.orderedChannels ?? []
+    }
+
+    /// DVR 畫面的總頁數（自訂畫面為 1）
+    var pageCount: Int {
+        guard !isCustomLive else { return 1 }
+        return max(1, (liveDeviceChannels.count + dvrLayout - 1) / dvrLayout)
+    }
+
+    /// 畫面實際顯示的格子與分割數
+    var gridSlots: [CameraRef?] {
+        guard let id = liveDeviceID else { return slots }
+        var r = [CameraRef?](repeating: nil, count: Self.maxSlots)
+        let chs = liveDeviceChannels
+        let start = min(dvrPage, pageCount - 1) * dvrLayout
+        for (i, c) in chs.dropFirst(start).prefix(dvrLayout).enumerated() { r[i] = CameraRef(deviceID: id, channelID: c.id) }
+        return r
+    }
+
+    var gridLayout: Int { isCustomLive ? layout : dvrLayout }
+
+    /// DVR 畫面換頁（循環）
+    func changePage(by offset: Int) {
+        guard !isCustomLive, pageCount > 1 else { return }
+        enlargedSlot = nil
+        focusedSlot = 0
+        dvrPage = ((dvrPage + offset) % pageCount + pageCount) % pageCount
+    }
+
+    /// 切換到自訂畫面
+    func switchToCustom() {
+        if mode == .playback { mode = .live }
+        liveDeviceID = nil
+    }
+
+    /// 把整個畫面切到另一台 DVR。
+    /// 即時：顯示該 DVR 的所有頻道。回放：切到同一個頻道編號（沒有則第一個頻道），日期不變。
+    func switchTo(_ id: UUID) {
+        guard let target = device(id) else { return }
+        if mode == .playback {
+            let idx = playbackRef.flatMap { r in device(r.deviceID)?.orderedChannels.firstIndex { $0.id == r.channelID } } ?? 0
+            let chs = target.orderedChannels
+            if let ch = chs.indices.contains(idx) ? chs[idx] : chs.first {
+                playbackRef = CameraRef(deviceID: id, channelID: ch.id)
+            } else {
+                showToast("「\(target.config.name)」尚未載入頻道")
+            }
+            return
+        }
+        liveDeviceID = id
+    }
+
+    /// 切到上一台／下一台 DVR（依側邊欄順序）
+    func switchDevice(by offset: Int) {
+        guard !devices.isEmpty else { return }
+        let i = currentDeviceID.flatMap { id in devices.firstIndex { $0.id == id } } ?? (offset > 0 ? -1 : 0)
+        let n = devices.count
+        switchTo(devices[((i + offset) % n + n) % n].id)
+    }
+
     func name(of ref: CameraRef) -> String {
         device(ref.deviceID)?.displayName(ref.channelID) ?? "頻道"
     }
@@ -130,13 +224,22 @@ final class AppStore {
     var visibleSlotCount: Int { layout }
 
     func assign(_ ref: CameraRef, to slot: Int) {
-        guard slot >= 0, slot < Self.maxSlots else { return }
+        guard isCustomLive, slot >= 0, slot < Self.maxSlots else { return }
         slots[slot] = ref
         focusedSlot = slot
     }
 
     /// 點側邊欄頻道：放到目前選取的格子，並移到下一格
     func showInLive(_ ref: CameraRef) {
+        // DVR 畫面：選取該頻道（其他 DVR 的頻道則先切到那台）
+        if !isCustomLive {
+            if liveDeviceID != ref.deviceID { liveDeviceID = ref.deviceID }
+            if let i = liveDeviceChannels.firstIndex(where: { $0.id == ref.channelID }) {
+                if dvrPage != i / dvrLayout { enlargedSlot = nil; dvrPage = i / dvrLayout }
+                focusedSlot = i % dvrLayout
+            }
+            return
+        }
         if let existing = slots.prefix(layout).firstIndex(of: ref) {
             focusedSlot = existing
             return
@@ -146,11 +249,21 @@ final class AppStore {
     }
 
     func clear(slot: Int) {
+        guard isCustomLive else { return }
         slots[slot] = nil
         if enlargedSlot == slot { enlargedSlot = nil }
     }
 
     func setLayout(_ n: Int) {
+        if !isCustomLive {
+            // DVR 畫面：保持目前選取的頻道在新的頁面上
+            let index = dvrPage * dvrLayout + focusedSlot
+            dvrLayout = n
+            dvrPage = index / n
+            focusedSlot = index % n
+            enlargedSlot = nil
+            return
+        }
         layout = n
         enlargedSlot = nil
         if focusedSlot >= n { focusedSlot = 0 }
@@ -195,13 +308,14 @@ final class AppStore {
         var layout: Int
         var slots: [CameraRef?]
         var playbackRef: CameraRef?
+        var liveDeviceID: UUID?
     }
 
     private var loadingUI = false
 
     private func saveUI() {
         guard !loadingUI else { return }
-        let s = UIState(mode: mode, layout: layout, slots: slots, playbackRef: playbackRef)
+        let s = UIState(mode: mode, layout: layout, slots: slots, playbackRef: playbackRef, liveDeviceID: liveDeviceID)
         if let d = try? JSONEncoder().encode(s) { UserDefaults.standard.set(d, forKey: "uiState") }
     }
 
@@ -217,6 +331,7 @@ final class AppStore {
         let ids = Set(devices.map(\.id))
         slots = Array(sl.prefix(Self.maxSlots)).map { r in r.flatMap { ids.contains($0.deviceID) ? $0 : nil } }
         playbackRef = s.playbackRef.flatMap { ids.contains($0.deviceID) ? $0 : nil }
+        liveDeviceID = s.liveDeviceID.flatMap { ids.contains($0) ? $0 : nil }
     }
 
     // MARK: - 截圖
