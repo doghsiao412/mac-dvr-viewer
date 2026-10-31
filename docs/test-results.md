@@ -247,4 +247,9 @@
 | — | App：回放頁「事件」清單（類型／攝影機篩選、點一下跳到該時間、4 分割時選取該格） | ✅ 使用者確認（2026-10-31） |
 | — | App：時間軸 I／O 或 Shift＋拖曳標記範圍、黃色範圍顯示、「下載」帶入精確範圍 | ✅ 使用者確認（2026-10-31） |
 | 2026-10-31 | App：單格回放標題列與時間軸移到畫面外；控制列播放鍵置中（左右等寬） | ✅ 使用者確認 |
-
+| 2026-10-31 | iPhone 版第 1 步：DVRKit 以 `xcodebuild -destination 'generic/platform=iOS'` 編譯 | ✅ 編譯成功（僅編譯，尚未在 iPhone 實機執行） |
+| 2026-10-31 | 跨平台 XML 解析 `DVRXMLElement` Mock 測試（路徑、屬性、CDATA、實體字元、格式錯誤） | ✅ 4/4；DVRKit 全部 16 項測試通過 |
+| 2026-10-31 | 換用 `DVRXMLElement` 後重跑 `dvrcli events 2026-10-30`（8082，macOS） | ✅ 16 頻道共 745 筆 MOTION，與先前結果一致 |
+| 2026-10-31 | iPhone 版第 2 步：`DVRViewerPhone` 以 Personal Team 簽章編譯並安裝到 iPhone 實機（iPhone19,4） | ✅ 編譯、簽章、安裝成功；⏳ 啟動待使用者在 iPhone 信任開發者，即時影像尚未在 iPhone 驗證 |
+| 2026-10-31 | 共用檔案移到 `mac/Shared/` 後重新編譯 Mac App | ✅ 編譯成功 |
+| 2026-10-31 | iPhone App：信任開發者後啟動、加入 DVR、單頻道即時影像 | ✅ 使用者在 iPhone 實機確認看到影像 |

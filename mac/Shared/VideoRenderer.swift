@@ -14,7 +14,7 @@ final class VideoRenderer: @unchecked Sendable {
 
     init() {
         layer.videoGravity = .resizeAspect
-        layer.backgroundColor = NSColor.black.cgColor
+        layer.backgroundColor = CGColor(gray: 0, alpha: 1)
     }
 
     var lastPixelBuffer: CVPixelBuffer? { lock.withLock { _last } }
@@ -63,6 +63,7 @@ final class VideoRenderer: @unchecked Sendable {
 }
 
 /// SwiftUI 包裝：承載 renderer 的 layer
+#if os(macOS)
 struct VideoSurface: NSViewRepresentable {
     let renderer: VideoRenderer
     var aspect: VideoAspect = .fit
@@ -99,3 +100,39 @@ struct VideoSurface: NSViewRepresentable {
         }
     }
 }
+#else
+struct VideoSurface: UIViewRepresentable {
+    let renderer: VideoRenderer
+    var aspect: VideoAspect = .fit
+
+    func makeUIView(context: Context) -> LayerHostView {
+        let v = LayerHostView()
+        v.backgroundColor = .black
+        v.hosted = renderer.layer
+        v.layer.addSublayer(renderer.layer)
+        renderer.setAspect(aspect)
+        return v
+    }
+
+    func updateUIView(_ v: LayerHostView, context: Context) {
+        renderer.setAspect(aspect)
+        if v.hosted !== renderer.layer {
+            v.hosted?.removeFromSuperlayer()
+            v.hosted = renderer.layer
+            v.layer.addSublayer(renderer.layer)
+            v.setNeedsLayout()
+        }
+    }
+
+    final class LayerHostView: UIView {
+        var hosted: CALayer?
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            hosted?.frame = bounds
+            CATransaction.commit()
+        }
+    }
+}
+#endif

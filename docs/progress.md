@@ -9,6 +9,14 @@
 
 ## 下一版待辦
 
+* **iPhone 版（試作中）**：計畫 ① DVRKit 支援 iOS → ② 新增 iPhone App 最小版（加入 DVR、頻道清單、單頻道即時影像）→ ③ 手機介面（4 分割、全螢幕、橫放、回放時間軸、事件、下載存到照片／檔案）→ ④ 平台差異（無 Sparkle 改 TestFlight／Xcode 安裝、Info.plist 開放 HTTP 與區域網路權限、切背景後自動重連）。
+  * ✅ ①（2026-10-31）：Package 加 `.iOS(.v26)`；macOS 專屬的 `XMLDocument` 改為跨平台 `DVRXMLElement`（`XMLParser`）；`AudioPlayer` 在 iOS 設定 `AVAudioSession`（.playback）。iOS 編譯成功、macOS 測試與 App 編譯通過、dvrcli 對實體 DVR 結果不變。**尚未在 iPhone 實機執行。**
+  * ✅ ②（2026-10-31，**使用者已在 iPhone 實機確認即時影像**）：同一個 Xcode 專案新增 target `DVRViewerPhone`（`mac/DVRViewerPhone/`，Bundle ID `local.dvrviewer.phone`，Personal Team 自動簽章）。Mac 與 iPhone 共用的檔案移到 `mac/Shared/`（DeviceConfig、DeviceModel、KeychainStore、VideoRenderer、PlayerControllers；`VideoSurface` 以 `#if os` 分 NSView／UIView）。畫面：DVR 清單（滑動編輯／刪除）→ 加入 DVR（測試登入後才儲存）→ 頻道清單（離線頻道不可點）→ 單頻道即時影像（流暢／高畫質、聲音、直放 16:9、橫放全螢幕點一下顯示控制、觀看時不自動鎖定）。iPhone 實機編譯、簽章、安裝成功；使用者在 iPhone 信任開發者後，加入 DVR 並看到即時影像。
+    * 免費 Personal Team 簽章 7 天到期，到期後需重新從 Xcode 安裝。
+    * 這台 Mac 未安裝 iOS 模擬器執行環境（約 8 GB），目前直接用實機測試。
+    * App 圖示沿用 Mac 版 1024 圖（含 macOS 透明圓角邊），之後換成 iOS 專用圖示。
+  * 下一步：③ 手機介面（4 分割、回放時間軸、事件、下載存到照片／檔案）。
+
 * **1.1 已發佈（build 17）**：回放頁「事件」清單（移動偵測等，來源為錄影區段的非排程類型＋有權限時的系統日誌）；時間軸標記下載範圍（I／O、Shift＋拖曳），「下載」帶入精確到秒的範圍；單格回放介面不遮畫面、控制列播放鍵置中。dvrcli `events` 已對實體 DVR 驗證；App 介面使用者已確認；系統日誌合併未驗證。
 
 * ~~appcast 改放 GitHub Releases 附件~~：✅ 0.8 完成（SUFeedURL＝releases/latest/download/appcast.xml；repo 根目錄 appcast.xml 仍需更新給 0.7.2 以前的版本）。

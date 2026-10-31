@@ -9,17 +9,29 @@
 /* Begin PBXBuildFile section */
 		D7A000000000000000000001 /* DVRKit in Frameworks */ = {isa = PBXBuildFile; productRef = D7A000000000000000000020 /* DVRKit */; };
 		D7A000000000000000000030 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = D7A000000000000000000031 /* Sparkle */; };
+		D7A000000000000000000101 /* DVRKit in Frameworks */ = {isa = PBXBuildFile; productRef = D7A000000000000000000120 /* DVRKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		D7A000000000000000000002 /* DVR Viewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DVR Viewer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D7A00000000000000000000B /* Config */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Config; sourceTree = "<group>"; };
+		D7A000000000000000000102 /* DVR Viewer Phone.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DVR Viewer Phone.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D7A000000000000000000003 /* DVRViewer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DVRViewer;
+			sourceTree = "<group>";
+		};
+		D7A000000000000000000103 /* DVRViewerPhone */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DVRViewerPhone;
+			sourceTree = "<group>";
+		};
+		D7A000000000000000000140 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +46,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D7A000000000000000000104 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D7A000000000000000000101 /* DVRKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -41,6 +61,8 @@
 			isa = PBXGroup;
 			children = (
 				D7A000000000000000000003 /* DVRViewer */,
+				D7A000000000000000000103 /* DVRViewerPhone */,
+				D7A000000000000000000140 /* Shared */,
 				D7A00000000000000000000B /* Config */,
 				D7A000000000000000000006 /* Products */,
 			);
@@ -50,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				D7A000000000000000000002 /* DVR Viewer.app */,
+				D7A000000000000000000102 /* DVR Viewer Phone.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -71,6 +94,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				D7A000000000000000000003 /* DVRViewer */,
+				D7A000000000000000000140 /* Shared */,
 			);
 			name = DVRViewer;
 			packageProductDependencies = (
@@ -79,6 +103,30 @@
 			);
 			productName = DVRViewer;
 			productReference = D7A000000000000000000002 /* DVR Viewer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D7A000000000000000000107 /* DVRViewerPhone */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D7A000000000000000000110 /* Build configuration list for PBXNativeTarget "DVRViewerPhone" */;
+			buildPhases = (
+				D7A000000000000000000108 /* Sources */,
+				D7A000000000000000000104 /* Frameworks */,
+				D7A000000000000000000109 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D7A000000000000000000103 /* DVRViewerPhone */,
+				D7A000000000000000000140 /* Shared */,
+			);
+			name = DVRViewerPhone;
+			packageProductDependencies = (
+				D7A000000000000000000120 /* DVRKit */,
+			);
+			productName = DVRViewerPhone;
+			productReference = D7A000000000000000000102 /* DVR Viewer Phone.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -92,6 +140,9 @@
 				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					D7A000000000000000000007 = {
+						CreatedOnToolsVersion = 27.2;
+					};
+					D7A000000000000000000107 = {
 						CreatedOnToolsVersion = 27.2;
 					};
 				};
@@ -116,6 +167,7 @@
 			projectRoot = "";
 			targets = (
 				D7A000000000000000000007 /* DVRViewer */,
+				D7A000000000000000000107 /* DVRViewerPhone */,
 			);
 		};
 /* End PBXProject section */
@@ -128,10 +180,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D7A000000000000000000109 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D7A000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D7A000000000000000000108 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -235,6 +301,72 @@
 			};
 			name = Release;
 		};
+		D7A000000000000000000114 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P97GT4S4XG;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Phone-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "DVR Viewer";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "DVR Viewer 需要連線到區域網路內的 DVR／NVR 以觀看即時影像與錄影。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = local.dvrviewer.phone;
+				PRODUCT_MODULE_NAME = DVRViewerPhone;
+				PRODUCT_NAME = "DVR Viewer Phone";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		D7A000000000000000000115 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = P97GT4S4XG;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Phone-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "DVR Viewer";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "DVR Viewer 需要連線到區域網路內的 DVR／NVR 以觀看即時影像與錄影。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = local.dvrviewer.phone;
+				PRODUCT_MODULE_NAME = DVRViewerPhone;
+				PRODUCT_NAME = "DVR Viewer Phone";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -252,6 +384,15 @@
 			buildConfigurations = (
 				D7A000000000000000000012 /* Debug */,
 				D7A000000000000000000013 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D7A000000000000000000110 /* Build configuration list for PBXNativeTarget "DVRViewerPhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D7A000000000000000000114 /* Debug */,
+				D7A000000000000000000115 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -285,6 +426,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D7A000000000000000000032 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		D7A000000000000000000120 /* DVRKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DVRKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

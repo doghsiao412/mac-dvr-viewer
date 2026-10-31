@@ -54,7 +54,7 @@ public actor NVMSClient {
 
     /// 傳送指令並回傳 `<response>` 根節點。`status != success` 時丟出 `NVMSError.device`。
     @discardableResult
-    public func call(_ command: String, body: String? = nil) async throws -> XMLElement {
+    public func call(_ command: String, body: String? = nil) async throws -> DVRXMLElement {
         var req = URLRequest(url: baseURL.appending(path: command))
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
@@ -67,13 +67,7 @@ public actor NVMSClient {
         let (data, resp) = try await session.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw NVMSError.transport("非 HTTP 回應") }
         guard http.statusCode == 200 else { throw NVMSError.http(http.statusCode) }
-        let doc: XMLDocument
-        do {
-            doc = try XMLDocument(data: data, options: [])
-        } catch {
-            throw NVMSError.badXML(String(decoding: data.prefix(200), as: UTF8.self))
-        }
-        guard let root = doc.rootElement() else { throw NVMSError.badXML("無根節點") }
+        let root = try DVRXMLElement.parse(data)
         let status = root.text("status")
         if status != "success" {
             let code = Int(root.text("errorCode") ?? "") ?? -1
@@ -133,7 +127,7 @@ public actor NVMSClient {
         let root = try await call("queryNodeList", body: body)
         return root.elements(forPath: "content/item").enumerated().map { idx, item in
             DVRChannel(
-                id: item.attribute(forName: "id")?.stringValue ?? "",
+                id: item.attribute("id") ?? "",
                 name: item.text("name") ?? "",
                 index: Int(item.text("chlIndex") ?? "") ?? idx,
                 type: item.text("chlType"))
@@ -143,20 +137,20 @@ public actor NVMSClient {
     /// 目前在線的頻道 ID
     public func onlineChannelIds() async throws -> Set<String> {
         let root = try await call("queryOnlineChlList")
-        return Set(root.elements(forPath: "content/item").compactMap { $0.attribute(forName: "id")?.stringValue })
+        return Set(root.elements(forPath: "content/item").compactMap { $0.attribute("id") })
     }
 
     /// 有錄影的頻道 ID
     public func channelsWithRecordings() async throws -> Set<String> {
         let root = try await call("queryChlsExistRec")
-        return Set(root.elements(forPath: "content/item").compactMap { $0.attribute(forName: "id")?.stringValue })
+        return Set(root.elements(forPath: "content/item").compactMap { $0.attribute("id") })
     }
 
     /// 有錄影的日期（回傳 DVR 原始字串）
     public func datesWithRecordings(channelIds: [String]) async throws -> [String] {
         let cond = channelIds.map { "<chlId>\($0)</chlId>" }.joined()
         let root = try await call("queryDatesExistRec", body: Self.request("<condition>\(cond)</condition>"))
-        return root.elements(forPath: "content/item").compactMap { $0.attribute(forName: "date")?.stringValue ?? $0.stringValue }
+        return root.elements(forPath: "content/item").compactMap { $0.attribute("date") ?? $0.stringValue }
     }
 
     /// 指定時間範圍的錄影區段（`queryChlRecLog`）。時間為 DVR 本地時間 "yyyy-MM-dd HH:mm:ss"（網頁 getTimeRangeByDate 不轉 UTC）。
@@ -192,13 +186,13 @@ public actor NVMSClient {
         x += "</logType><startTime>\(Self.cdata(start))</startTime><endTime>\(Self.cdata(end))</endTime></condition>"
         let root = try await call("queryLog", body: Self.request(x))
         let content = root.elements(forName: "content").first
-        let total = Int(content?.attribute(forName: "total")?.stringValue ?? "") ?? 0
+        let total = Int(content?.attribute("total") ?? "") ?? 0
         let items = root.elements(forPath: "content/item").map { e in
             AlarmLogItem(
                 type: e.text("logType") ?? "",
                 time: e.text("time") ?? "",
-                channelId: e.elements(forName: "chl").first?.attribute(forName: "id")?.stringValue,
-                triggerChannelIds: e.elements(forPath: "triggerRecChls/item").compactMap { $0.attribute(forName: "id")?.stringValue })
+                channelId: e.elements(forName: "chl").first?.attribute("id"),
+                triggerChannelIds: e.elements(forPath: "triggerRecChls/item").compactMap { $0.attribute("id") })
         }
         return (items, total)
     }
@@ -262,37 +256,5 @@ public enum NVMSError: Error, CustomStringConvertible {
         case 536870961: return "無錄影資料或播放結束"
         default: return "設備錯誤"
         }
-    }
-}
-
-// MARK: - XML 小工具
-
-extension XMLElement {
-    /// 以 "a/b/c" 路徑取第一個節點文字
-    func text(_ path: String) -> String? {
-        elements(forPath: path).first?.stringValue
-    }
-
-    func elements(forPath path: String) -> [XMLElement] {
-        var current: [XMLElement] = [self]
-        for part in path.split(separator: "/") {
-            current = current.flatMap { $0.elements(forName: String(part)) }
-        }
-        return current
-    }
-
-    /// 把 <content> 底下的葉節點攤平成 [路徑: 值]
-    func flatContent() -> [String: String] {
-        var out: [String: String] = [:]
-        func walk(_ e: XMLElement, _ prefix: String) {
-            let kids = e.children?.compactMap { $0 as? XMLElement } ?? []
-            if kids.isEmpty {
-                out[prefix] = e.stringValue ?? ""
-            } else {
-                for k in kids { walk(k, prefix.isEmpty ? (k.name ?? "") : prefix + "." + (k.name ?? "")) }
-            }
-        }
-        if let c = elements(forName: "content").first { walk(c, "") }
-        return out
     }
 }
