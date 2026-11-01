@@ -21,6 +21,13 @@ final class TranscriptModel {
     private(set) var summary: String?
     private(set) var summarizing = false
     private(set) var summaryError: String?
+    /// 潤飾後的文字（與 lines 一一對應；參考用，不取代原始辨識）
+    private(set) var polished: [String]?
+    private(set) var polishing = false
+    private(set) var polishProgress = 0.0
+    private(set) var polishError: String?
+    /// 顯示潤飾後（預設顯示原始辨識）
+    var showPolished = false
     private var task: Task<Void, Never>?
 
     var isRunning: Bool { if case .running = phase { return true } else { return false } }
@@ -32,6 +39,9 @@ final class TranscriptModel {
         lines = []
         summary = nil
         summaryError = nil
+        polished = nil
+        polishError = nil
+        showPolished = false
         phase = .running(fraction: 0, lines: 0)
         task = Task { [weak self] in
             do {
@@ -77,6 +87,35 @@ final class TranscriptModel {
         }
     }
 
+    func polish() {
+        guard !lines.isEmpty, !polishing else { return }
+        polishing = true
+        polishProgress = 0
+        polishError = nil
+        let lines = lines
+        Task { [weak self] in
+            do {
+                let p = try await TranscriptPolisher.polish(lines) { v in
+                    Task { @MainActor [weak self] in self?.polishProgress = v }
+                }
+                self?.polished = p
+                self?.showPolished = true
+                if !TranscriptPolisher.lastFailures.isEmpty {
+                    self?.polishError = "部分句子無法潤飾，保留原文"
+                }
+            } catch {
+                self?.polishError = "潤飾失敗：\(error.localizedDescription)"
+            }
+            self?.polishing = false
+        }
+    }
+
+    /// 某句目前要顯示的文字（潤飾後模式且有潤飾結果時用潤飾文字）
+    func displayText(_ line: RecordingTranscriber.Line) -> String {
+        guard showPolished, let p = polished, p.indices.contains(line.id) else { return line.text }
+        return p[line.id]
+    }
+
     /// 存成文字檔的內容
     func plainText(title: String) -> String {
         let f = DateFormatter()
@@ -85,8 +124,12 @@ final class TranscriptModel {
         d.dateFormat = "yyyy/MM/dd HH:mm:ss"
         var out = "\(title)\n"
         if let r = range { out += "\(d.string(from: r.lowerBound)) – \(f.string(from: r.upperBound))\n" }
-        out += "（語音辨識自動產生，可能有錯字；DVR Viewer 逐字稿 Beta）\n\n"
+        out += "（此為Mac語音轉錄及本地Apple Intelligence潤飾或摘要，會受到原始語音品質影響，內容需謹慎核對）\n\n"
         for l in lines { out += "\(f.string(from: l.start))  \(l.text)\n" }
+        if let p = polished {
+            out += "\n潤飾後（Apple Intelligence 校對，僅供參考，以原始辨識為準）\n"
+            for (l, t) in zip(lines, p) { out += "\(f.string(from: l.start))  \(t)\n" }
+        }
         if let s = summary { out += "\n摘要（Apple Intelligence）\n\(s)\n" }
         return out
     }
@@ -126,7 +169,7 @@ struct TranscriptPanel: View {
 
     private var shown: [RecordingTranscriber.Line] {
         let q = query.trimmingCharacters(in: .whitespaces)
-        return q.isEmpty ? model.lines : model.lines.filter { $0.text.localizedCaseInsensitiveContains(q) }
+        return q.isEmpty ? model.lines : model.lines.filter { model.displayText($0).localizedCaseInsensitiveContains(q) }
     }
 
     var body: some View {
@@ -153,10 +196,7 @@ struct TranscriptPanel: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Label("逐字稿", systemImage: "text.quote").font(.headline)
-                BetaBadge()
-            }
+            Label("逐字稿", systemImage: "text.quote").font(.headline)
             if let r = model.ref, model.phase != .idle, let range = model.range {
                 Text("\(name(r))　\(time.string(from: range.lowerBound))–\(time.string(from: range.upperBound))")
                     .font(.caption).foregroundStyle(.secondary)
@@ -211,7 +251,7 @@ struct TranscriptPanel: View {
             .controlSize(.large)
             .disabled(connection == nil || ref == nil || chosenRange == nil
                       || (chosenRange.map { $0.upperBound.timeIntervalSince($0.lowerBound) > Self.maxDuration } ?? true))
-            Text("Beta：此功能仍在測試中。使用 Mac 內建的語音辨識，全部在本機處理，不會上傳。只有附麥克風的攝影機才有聲音；辨識結果可能有錯字。")
+            Text("此為Mac語音轉錄及本地Apple Intelligence潤飾或摘要，會受到原始語音品質影響，內容需謹慎核對。全部在本機處理，不會上傳；只有附麥克風的攝影機才有聲音。")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
@@ -239,6 +279,7 @@ struct TranscriptPanel: View {
             .padding(12)
 
             summarySection
+            polishSection
             Divider()
 
             ScrollViewReader { proxy in
@@ -285,10 +326,43 @@ struct TranscriptPanel: View {
         .padding(.horizontal, 12).padding(.bottom, 10)
     }
 
+    /// 潤飾：Apple Intelligence 修正錯字與標點（參考用），可切換原始辨識／潤飾後
+    @ViewBuilder private var polishSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if model.polished != nil {
+                Picker("顯示", selection: $model.showPolished) {
+                    Text("原始辨識").tag(false)
+                    Text("潤飾後（參考）").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                if model.showPolished {
+                    Text("Apple Intelligence 依上下文修正錯字與標點，可能改錯，請以原始辨識為準。有修改的句子下方會顯示原文。")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else if model.polishing {
+                HStack(spacing: 8) {
+                    ProgressView(value: model.polishProgress).frame(width: 80)
+                    Text("Apple Intelligence 潤飾中…").font(.callout)
+                }
+            } else if TranscriptSummarizer.isAvailable {
+                Button { model.polish() } label: { Label("用 Apple Intelligence 潤飾（參考）", systemImage: "wand.and.stars") }
+                    .help("修正同音錯字、補標點；不會取代原始辨識")
+            }
+            if let e = model.polishError { Text(e).font(.caption).foregroundStyle(.orange) }
+        }
+        .padding(.horizontal, 12).padding(.bottom, 10)
+    }
+
     private func row(_ line: RecordingTranscriber.Line) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        let shown = model.displayText(line)
+        return VStack(alignment: .leading, spacing: 2) {
             Text(time.string(from: line.start)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            Text(highlighted(line.text)).font(.body).textSelection(.enabled)
+            Text(highlighted(shown)).font(.body).textSelection(.enabled)
+            if model.showPolished, shown != line.text {
+                Text("原文：\(line.text)").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
         }
         .padding(.vertical, 2)
     }
@@ -327,17 +401,5 @@ struct TranscriptPanel: View {
         panel.nameFieldStringValue = "\(title.replacingOccurrences(of: "：", with: "-"))-\(model.range.map { f.string(from: $0.lowerBound) } ?? "").txt"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? model.plainText(title: title).write(to: url, atomically: true, encoding: .utf8)
-    }
-}
-
-/// 「Beta」小標籤：功能仍在測試中
-struct BetaBadge: View {
-    var body: some View {
-        Text("Beta")
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6).padding(.vertical, 1)
-            .foregroundStyle(.orange)
-            .background(Capsule().strokeBorder(.orange, lineWidth: 1))
-            .help("此功能仍在測試中，辨識結果可能有錯誤")
     }
 }

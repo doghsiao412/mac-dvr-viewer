@@ -248,12 +248,80 @@ public enum TranscriptSummarizer {
         guard !chunks.isEmpty else { return "" }
         var parts: [String] = []
         for c in chunks {
-            let s = LanguageModelSession(instructions: instructions)
+            let s = LanguageModelSession(model: TranscriptPolisher.model, instructions: instructions)
             parts.append(try await s.respond(to: "以下是逐字稿（每行開頭為時間）：\n\(c)\n請整理重點。").content)
         }
         if parts.count == 1 { return parts[0] }
-        let s = LanguageModelSession(instructions: instructions)
+        let s = LanguageModelSession(model: TranscriptPolisher.model, instructions: instructions)
         let merged = parts.joined(separator: "\n\n").prefix(3000)
         return try await s.respond(to: "以下是同一段錄影各部分的重點，請合併成一份精簡的條列摘要：\n\(merged)").content
+    }
+}
+
+/// 逐字稿潤飾（參考用）：Apple Intelligence 依上下文修正同音錯字、補標點。
+/// 一句對一句（保留每句的時間），模型漏回或回錯的句子保留原文。原始辨識結果不會被取代。
+public enum TranscriptPolisher {
+    static let instructions = """
+        你負責校對監視器錄音的語音辨識逐字稿（繁體中文）。辨識結果常有同音或近音錯字、缺少標點。
+        規則：只修正明顯的錯字並補上標點；不要改寫句意、不要增加或刪除內容、不要合併或拆開句子；
+        聽不懂或不確定的句子保持原樣。每一句都要回傳，格式為「編號｜句子」，一句一行，不要其他說明。
+        """
+
+    /// 每批句數（裝置端模型上下文有限）
+    static let batchSize = 30
+    /// 最近一次潤飾失敗的批次與原因（驗證用，不含內容）
+    nonisolated(unsafe) public static var lastFailures: [String] = []
+
+    /// 轉換使用者自己的文字（校對、摘要）用寬鬆的內容過濾；預設過濾會把日常對話誤判為敏感內容
+    static var model: SystemLanguageModel { SystemLanguageModel(guardrails: .permissiveContentTransformations) }
+
+    /// 回傳與 lines 一一對應的潤飾文字（順序相同）
+    public static func polish(_ lines: [RecordingTranscriber.Line],
+                              progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> [String] {
+        var out = lines.map(\.text)
+        var failures: [String] = []
+        defer { lastFailures = failures }
+        var i = 0
+        while i < lines.count {
+            try Task.checkCancellation()
+            let range = i..<min(i + batchSize, lines.count)
+            try await polishBatch(Array(range), lines: lines, into: &out, failures: &failures)
+            i += batchSize
+            progress(min(Double(i) / Double(lines.count), 1))
+        }
+        return out
+    }
+
+    /// 一批失敗時拆成兩半重試（找出觸發過濾的少數句子，其餘照常潤飾）
+    static func polishBatch(_ idx: [Int], lines: [RecordingTranscriber.Line],
+                            into out: inout [String], failures: inout [String]) async throws {
+        guard !idx.isEmpty else { return }
+        let input = idx.enumerated().map { "\($0.offset + 1)｜\(lines[$0.element].text)" }.joined(separator: "\n")
+        let session = LanguageModelSession(model: model, instructions: instructions)
+        do {
+            let r = try await session.respond(to: "請校對以下 \(idx.count) 句：\n\(input)")
+            for row in r.content.split(whereSeparator: \.isNewline) {
+                let parts = row.split(separator: "｜", maxSplits: 1).map(String.init)
+                guard parts.count == 2,
+                      let n = Int(parts[0].trimmingCharacters(in: .whitespaces).filter(\.isNumber)),
+                      (1...idx.count).contains(n) else { continue }
+                let t = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                let original = lines[idx[n - 1]].text
+                // 防護：空白、或長度變化過大（可能改寫或補了內容）就保留原文
+                if !t.isEmpty, Double(t.count) <= Double(original.count) * 1.5 + 4, Double(t.count) >= Double(original.count) * 0.5 {
+                    out[idx[n - 1]] = t
+                }
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            if idx.count > 3 {
+                let mid = idx.count / 2
+                try await polishBatch(Array(idx[..<mid]), lines: lines, into: &out, failures: &failures)
+                try await polishBatch(Array(idx[mid...]), lines: lines, into: &out, failures: &failures)
+            } else {
+                failures.append("\(idx.count) 句保留原文：\(error)")
+            }
+        }
     }
 }

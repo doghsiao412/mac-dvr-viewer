@@ -483,8 +483,8 @@ struct PlaybackView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help("標記下載範圍：播放到開頭按 I、到結尾按 O；或按住 Shift 在時間軸上拖曳")
-            Button { showTranscript.toggle() } label: { toolLabel("逐字稿 Beta", "text.quote", labels) }
-                .help("（Beta）把這段錄影的對話轉成文字（T）")
+            Button { showTranscript.toggle() } label: { toolLabel("逐字稿", "text.quote", labels) }
+                .help("把這段錄影的對話轉成文字（T）")
                 .keyboardShortcut("t", modifiers: [])
             Button { snapshot() } label: { toolLabel("截圖", "camera", labels) }
                 .help("截圖")

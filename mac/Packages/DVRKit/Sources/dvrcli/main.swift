@@ -508,6 +508,28 @@ func runTranscribe(host: String, port: Int, user: String, rest: [String], args: 
             print("   第一句 \(tf.string(from: a.start))、最後一句 \(tf.string(from: b.start))–\(tf.string(from: b.end))")
         }
         print("   時間都在範圍內：\(inRange ? "✅" : "❌")；依時間排序：\(ordered ? "✅" : "❌")")
+        if args.bool("polish"), !lines.isEmpty {
+            let t1 = ContinuousClock.now
+            let polished = try await TranscriptPolisher.polish(lines)
+            func dist(_ a: [Character], _ b: [Character]) -> Int {
+                var prev = Array(0...b.count)
+                for (i, x) in a.enumerated() {
+                    var cur = [i + 1]
+                    for (j, y) in b.enumerated() { cur.append(min(prev[j + 1] + 1, cur[j] + 1, prev[j] + (x == y ? 0 : 1))) }
+                    prev = cur
+                }
+                return prev[b.count]
+            }
+            var changed = 0, edits = 0, total = 0, maxRatio = 0.0
+            for (l, p) in zip(lines, polished) {
+                let d = dist(Array(l.text), Array(p))
+                if d > 0 { changed += 1 }
+                edits += d; total += l.text.count
+                maxRatio = max(maxRatio, Double(d) / Double(max(l.text.count, 1)))
+            }
+            print("   潤飾：\(polished.count)/\(lines.count) 句對應、改動 \(changed) 句、改動字數比例 \(String(format: "%.0f%%", Double(edits) / Double(max(total, 1)) * 100))、單句最大改動 \(String(format: "%.0f%%", maxRatio * 100))、耗時 \(t1.duration(to: .now))（內容不顯示）")
+            for f in TranscriptPolisher.lastFailures { print("   ⚠️ 潤飾失敗 \(f.prefix(300))") }
+        }
         if args.bool("summary") {
             if let why = TranscriptSummarizer.unavailableReason { print("   摘要：❌ \(why)") }
             else if lines.isEmpty { print("   摘要：略過（沒有句子）") }

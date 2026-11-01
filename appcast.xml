@@ -4,12 +4,18 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.5</title>
-      <pubDate>Sun, 01 Nov 2026 14:37:45 GMT</pubDate>
-      <sparkle:version>26</sparkle:version>
-      <sparkle:shortVersionString>1.5</sparkle:shortVersionString>
+      <title>DVR Viewer 1.5.1</title>
+      <pubDate>Sun, 01 Nov 2026 16:00:39 GMT</pubDate>
+      <sparkle:version>27</sparkle:version>
+      <sparkle:shortVersionString>1.5.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.5
+      <description sparkle:format="markdown"><![CDATA[v1.5.1
+
+- 逐字稿新增「用 Apple Intelligence 潤飾（參考）」：依上下文修正同音錯字與標點，可切換「原始辨識／潤飾後」對照，有修改的句子會顯示原文；存成文字檔時兩份都會保留。
+- 逐字稿與摘要改用適合轉換使用者文字的內容過濾，避免日常對話被誤判為敏感內容而無法處理。
+- 逐字稿正式推出（移除 Beta 標示）。此為 Mac 語音轉錄及本地 Apple Intelligence 潤飾或摘要，會受到原始語音品質影響，內容需謹慎核對。
+
+v1.5
 
 - 錄影逐字稿（Beta）：錄影回放按「逐字稿 Beta」（T），把一段錄影的對話轉成有時間點的文字；點一下句子就跳到該時間播放，可搜尋關鍵字、用 Apple Intelligence 整理摘要、存成文字檔。使用 Mac 內建語音辨識，全部在本機處理，不會上傳；需附麥克風的攝影機。
 - 修正錄影回放右側面板開啟時，「標記」選單只剩箭頭的問題。
@@ -165,11 +171,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5/DVR-Viewer-1.5.dmg" sparkle:edSignature="+g5aheRwHrOSc7nY+oYeUpCP6eJhMveyXGll/Jjl9Ba/NvRf3tBXjwMfuRsVkh963bq5zMKdhLKComn/bs0oBw==" length="2922753" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5.1/DVR-Viewer-1.5.1.dmg" sparkle:edSignature="5IgwYDnnYw+8mUVVUQeDL+G2Gh7bRL7mXPnvQxGrDsn+WGiA8smJDE2q5ZUYvPX9BlweJr+e0TOvZH7iAs0rCg==" length="2946785" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: BpkoXWhCnDZSzZ1qasoFrO27ztxe7WHoVjipb00reuWf/rpBTgLVdnRf1nVe3DtNv5gW2N2RzRv4ws3zVXYaBA==
-length: 10848
+edSignature: cAt3RQs8ApfyM3MSqZEwu0RddFZSmir7hhkFmWM1T4NIjR5tyhE8Wk9B30IPyJzJigMFMOzzoPMy1FTkZMCZAg==
+length: 11413
 -->
