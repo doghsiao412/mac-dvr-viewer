@@ -6,10 +6,16 @@ struct ContentView: View {
     @State private var editor: DeviceEditorTarget?
     @Environment(\.openSettings) private var openSettings
     @State private var renameText = ""
+    @State private var window: NSWindow?
+    @State private var columns: NavigationSplitViewVisibility = .automatic
+    /// 進入隱藏介面前的側邊欄狀態、視窗是否本來就是全螢幕
+    @State private var savedColumns: NavigationSplitViewVisibility = .automatic
+    @State private var wasFullScreen = false
+    @State private var cursorHider = IdleHider()
 
     var body: some View {
         @Bindable var store = store
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             SidebarView(editor: $editor)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
@@ -50,6 +56,22 @@ struct ContentView: View {
         }
         // 關閉視窗後 App 仍在背景執行：重新打開主視窗時從靜音開始，並依設定決定是否回到上次的畫面
         .onAppear { store.mainWindowOpened() }
+        .background(WindowReader { if window !== $0 { window = $0 } })
+        .toolbar(store.immersive ? .hidden : .automatic, for: .windowToolbar)
+        .onChange(of: store.immersive) { _, on in applyImmersive(on) }
+        // 從綠色按鈕或 ⌃⌘F 離開系統全螢幕：一併恢復介面
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { n in
+            if store.immersive, (n.object as? NSWindow) === window { wasFullScreen = true; store.immersive = false }
+        }
+        // 全螢幕時滑鼠靜止 3 秒隱藏游標
+        .onContinuousHover { _ in if store.immersive { cursorHider.poke() } }
+        .background {
+            if store.immersive {
+                Button("") { store.immersive = false }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .opacity(0).accessibilityHidden(true)
+            }
+        }
         .toolbar {
             if !store.devices.isEmpty {
                 ToolbarItem(placement: .navigation) { DeviceSwitcher() }
@@ -74,6 +96,14 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                     .help("同步回放分割畫面：4 分割時所有畫面同步播放同一時間")
+                }
+            }
+            if !store.devices.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { store.immersive = true } label: {
+                        Label("全螢幕", systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                    .help("全螢幕並隱藏介面（⇧⌘F，按 Esc 離開）")
                 }
             }
             if store.mode == .live {
@@ -121,6 +151,23 @@ struct ContentView: View {
         }
         .sheet(item: $editor) { target in
             DeviceEditorView(target: target)
+        }
+    }
+}
+
+extension ContentView {
+    /// 進入／離開隱藏介面：切換系統全螢幕並收合側邊欄
+    func applyImmersive(_ on: Bool) {
+        if on {
+            savedColumns = columns
+            wasFullScreen = window?.styleMask.contains(.fullScreen) ?? false
+            withAnimation(.snappy) { columns = .detailOnly }
+            if let w = window, !wasFullScreen { w.toggleFullScreen(nil) }
+            store.showToast("按 Esc 離開全螢幕")
+        } else {
+            cursorHider.stop()
+            withAnimation(.snappy) { columns = savedColumns == .detailOnly ? .automatic : savedColumns }
+            if let w = window, !wasFullScreen, w.styleMask.contains(.fullScreen) { w.toggleFullScreen(nil) }
         }
     }
 }

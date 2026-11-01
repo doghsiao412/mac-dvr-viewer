@@ -143,6 +143,9 @@ final class AppStore {
         focusedSlot = 0
     }
 
+    /// 全螢幕並隱藏介面（側邊欄、工具列、外框），只留影像
+    var immersive = false
+
     // 提示訊息
     var toast: String?
 

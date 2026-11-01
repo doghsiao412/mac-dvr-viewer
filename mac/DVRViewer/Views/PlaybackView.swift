@@ -26,6 +26,8 @@ struct PlaybackView: View {
     @State private var markOut: Date?
     /// 拖曳頻道經過的格子（4 分割為格子序號，1 分割為 0）
     @State private var dropTarget: Int?
+    /// 全螢幕隱藏介面時，滑鼠移動才顯示標題列與控制列
+    @State private var chrome = IdleHider()
 
     private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16]
 
@@ -65,7 +67,47 @@ struct PlaybackView: View {
     }
 
     /// 標題列與時間軸放在畫面上下方，不遮住影像（1 分割、4 分割相同）。
-    private var layoutBody: some View {
+    /// 全螢幕隱藏介面時影像滿版，滑鼠移動才浮出標題列與控制列。
+    @ViewBuilder private var layoutBody: some View {
+        if store.immersive {
+            immersiveBody
+        } else {
+            normalBody
+        }
+    }
+
+    private var immersiveBody: some View {
+        video
+            .ignoresSafeArea()
+            .overlay(alignment: .top) {
+                if chrome.visible {
+                    header
+                        .padding(.horizontal, 16).padding(.vertical, 8)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.top, 12).padding(.horizontal, 16)
+                        .onHover { chrome.pinned = $0 }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if chrome.visible {
+                    controls
+                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                        .padding(.horizontal, 16).padding(.bottom, 16)
+                        .onHover { chrome.pinned = $0 }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: chrome.visible)
+            .background(Color.black)
+            .onContinuousHover { _ in chrome.poke() }
+            .onAppear { chrome.poke() }
+            .onDisappear { chrome.stop() }
+            // 彈出事件清單、下載視窗時不要隱藏
+            .onChange(of: showEvents || showExport) { _, open in chrome.pinned = open }
+    }
+
+    private var normalBody: some View {
         VStack(spacing: 8) {
             header
                 .padding(.horizontal, 16).padding(.vertical, 8)

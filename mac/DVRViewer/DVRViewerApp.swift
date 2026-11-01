@@ -50,6 +50,9 @@ struct DVRCommands: Commands {
             Divider()
             Button("放大／還原選取的畫面") { store.toggleEnlarge(store.focusedSlot) }
                 .keyboardShortcut(.return, modifiers: [.command])
+            Button(store.immersive ? "離開全螢幕" : "全螢幕（隱藏介面）") { store.immersive.toggle() }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(store.devices.isEmpty)
             Divider()
             Button("上一頁") { store.changePage(by: -1) }
                 .keyboardShortcut("[", modifiers: [.command])
