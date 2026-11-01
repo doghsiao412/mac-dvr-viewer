@@ -44,6 +44,10 @@ struct LiveGridView: View {
             }
         }
         .background(Color.black)
+        #if DEBUG
+        .background(GeometryReader { g in Color.clear.onAppear { UITestHarness.gridFrame = g.frame(in: .global) }
+            .onChange(of: g.frame(in: .global)) { _, f in UITestHarness.gridFrame = f } })
+        #endif
         .overlay(alignment: .bottom) {
             if store.pageCount > 1 && store.enlargedSlot == nil { PageControl() }
         }

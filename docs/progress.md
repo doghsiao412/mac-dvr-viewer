@@ -44,6 +44,7 @@
     * 首頁「編輯」後點設備沒反應：編輯模式下連結會被停用。改為編輯模式點設備打開「編輯 DVR」，並加上左側刪除鈕（模擬器確認）。
   * 之後可做：多台 DVR 的自訂 4 分割、回放 4 分割、TestFlight 發佈（需付費 Apple Developer Program）。
 
+* **1.4.3 已發佈（build 25）**：全螢幕改用 `windowToolbarFullScreenVisibility(.onHover)`，不再移除工具列；版面自動測試（Debug，`DVRVIEWER_UITEST`）驗證進出全螢幕版面正確。
 * **1.4.2 已發佈（build 24）**：全螢幕進出改為等動畫完成才切換介面、隱藏介面時延伸到頂端；待使用者確認。
 * **1.4.1 已發佈（build 23）**：修正切換分割數後版面跑掉（VideoSurface 圖層隨 frame 同步、即時分割改用 VStack／HStack）；待使用者確認。
 * **1.4 已發佈（build 22）**：全螢幕隱藏介面（`store.immersive`、`ImmersiveSupport.swift`）。

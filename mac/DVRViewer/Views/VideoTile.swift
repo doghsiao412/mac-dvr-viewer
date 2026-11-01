@@ -47,6 +47,9 @@ struct VideoTile: View {
         }
         .task(id: StreamKey(ref: ref, main: mainStream, conn: ObjectIdentifier(device.connection), ready: device.webStreaming != nil)) {
             guard device.webStreaming != nil else { return }  // 等待偵測完成（WebSocket 或私有協定）
+            #if DEBUG
+            if UITestHarness.enabled { return }   // 版面測試：不開影像串流
+            #endif
             await controller.run(connection: device.connection, channelID: ref.channelID, mainStream: mainStream)
         }
     }

@@ -53,19 +53,22 @@ struct ContentView: View {
                 }
             }
             .animation(.snappy, value: store.toast)
-            // 隱藏介面時延伸到螢幕頂端（不保留標題列的空間）
-            .ignoresSafeArea(.container, edges: store.chromeHidden ? .all : [])
         }
         // 關閉視窗後 App 仍在背景執行：重新打開主視窗時從靜音開始，並依設定決定是否回到上次的畫面
         .onAppear { store.mainWindowOpened() }
-        .background(WindowReader { if window !== $0 { window = $0 } })
-        .toolbar(store.chromeHidden ? .hidden : .automatic, for: .windowToolbar)
+        .background(WindowReader { w in
+            guard window !== w else { return }
+            window = w
+            #if DEBUG
+            if let w { UITestHarness.startIfRequested(window: w, store: store) }
+            #endif
+        })
         .onChange(of: store.immersive) { _, on in applyImmersive(on) }
-        // 全螢幕動畫完成後才隱藏介面
+        // 全螢幕動畫完成後才收合介面
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { n in
             if store.immersive, (n.object as? NSWindow) === window { hideChrome() }
         }
-        // 離開全螢幕動畫完成後才恢復介面；從綠色按鈕或 ⌃⌘F 離開時也一併恢復
+        // 從綠色按鈕或 ⌃⌘F 離開系統全螢幕：一併恢復介面
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { n in
             guard (n.object as? NSWindow) === window else { return }
             if store.immersive { store.immersive = false } else { showChrome() }
@@ -163,18 +166,19 @@ struct ContentView: View {
 }
 
 extension ContentView {
-    /// 進入／離開隱藏介面。順序：先切換系統全螢幕，動畫完成（didEnter／didExit）後才隱藏或恢復工具列與側邊欄。
-    /// 兩者同時進行時 macOS 會把版面算錯（工具列與內容重疊、畫面偏移）。
+    /// 進入／離開隱藏介面。
+    /// 不自己移除工具列（SwiftUI 在全螢幕中移除再加回工具列會讓側邊欄與內容版面錯亂，
+    /// 隱藏的工具列區域也會擋住滑鼠）。工具列由 `windowToolbarFullScreenVisibility(.onHover)`
+    /// 在全螢幕時自動隱藏：影像延伸到螢幕頂端，滑鼠移到最上方時工具列滑出。
     func applyImmersive(_ on: Bool) {
         if on {
             savedColumns = columns
             wasFullScreen = window?.styleMask.contains(.fullScreen) ?? false
             if let w = window, !wasFullScreen {
-                w.toggleFullScreen(nil)
-                // 保險：若沒有收到全螢幕完成通知，稍後仍隱藏介面
+                w.toggleFullScreen(nil)   // 介面在 didEnterFullScreen 時收合
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(2))
-                    if store.immersive && !store.chromeHidden { hideChrome() }
+                    if store.immersive && !store.chromeHidden && (window?.styleMask.contains(.fullScreen) ?? false) { hideChrome() }
                 }
             } else {
                 hideChrome()
@@ -182,15 +186,8 @@ extension ContentView {
             store.showToast("按 Esc 離開全螢幕")
         } else {
             cursorHider.stop()
-            if let w = window, !wasFullScreen, w.styleMask.contains(.fullScreen) {
-                w.toggleFullScreen(nil)   // 介面在 didExitFullScreen 時恢復
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(2))
-                    if !store.immersive && store.chromeHidden { showChrome() }
-                }
-            } else {
-                showChrome()
-            }
+            showChrome()
+            if let w = window, !wasFullScreen, w.styleMask.contains(.fullScreen) { w.toggleFullScreen(nil) }
         }
     }
 

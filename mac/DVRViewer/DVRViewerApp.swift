@@ -10,6 +10,8 @@ struct DVRViewerApp: App {
             ContentView()
                 .environment(store)
                 .frame(minWidth: 900, minHeight: 600)
+                // 全螢幕時工具列自動隱藏，滑鼠移到螢幕頂端才出現（影像延伸到頂端）
+                .windowToolbarFullScreenVisibility(.onHover)
         }
         .commands {
             DVRCommands(store: store)
