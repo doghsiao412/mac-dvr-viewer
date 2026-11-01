@@ -127,6 +127,22 @@ final class AppStore {
         didSet { UserDefaults.standard.set(useMainStreamWhenEnlarged, forKey: "useMainStreamWhenEnlarged") }
     }
 
+    /// 開啟 App 時回到上次的畫面（即時／回放、哪台 DVR、自訂畫面）
+    var restoreLastPosition: Bool = (UserDefaults.standard.object(forKey: "restoreLastPosition") as? Bool) ?? true {
+        didSet { UserDefaults.standard.set(restoreLastPosition, forKey: "restoreLastPosition") }
+    }
+
+    /// 主視窗出現時（啟動，或關閉視窗後再打開）：一律靜音；不保留位置時回到第一台 DVR 的即時影像
+    func mainWindowOpened() {
+        audioRef = nil
+        guard !restoreLastPosition else { return }
+        enlargedSlot = nil
+        mode = .live
+        if let first = devices.first?.id { liveDeviceID = first }
+        dvrPage = 0
+        focusedSlot = 0
+    }
+
     // 提示訊息
     var toast: String?
 

@@ -4,12 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.3.1</title>
-      <pubDate>Sun, 01 Nov 2026 03:57:28 GMT</pubDate>
-      <sparkle:version>20</sparkle:version>
-      <sparkle:shortVersionString>1.3.1</sparkle:shortVersionString>
+      <title>DVR Viewer 1.3.2</title>
+      <pubDate>Sun, 01 Nov 2026 04:48:24 GMT</pubDate>
+      <sparkle:version>21</sparkle:version>
+      <sparkle:shortVersionString>1.3.2</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.3.1
+      <description sparkle:format="markdown"><![CDATA[v1.3.2
+
+- 開啟 App（或關閉視窗後再打開）時，聲音一律從靜音開始。
+- 設定新增「開啟時回到上次使用的畫面」（預設開啟）；關閉後每次開啟都顯示第一台 DVR 的即時影像。
+
+v1.3.1
 
 - 修正即時影像雙擊放大（或返回分割畫面）時，畫面短暫中斷並顯示「重新連線中：串流已結束」的問題（同時看超過 6 路時較常發生）。
 
@@ -135,11 +140,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.3.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.3.1/DVR-Viewer-1.3.1.dmg" sparkle:edSignature="Rm9E5UiwZCK7t7CJSjGRto3F/tyAwKuPCycH0dh/YTdMLxcZ9VA3FCZFVrMmTeb6X6PEzOScH+OkrJfNIMu3Aw==" length="2714735" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.3.2/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.3.2/DVR-Viewer-1.3.2.dmg" sparkle:edSignature="HSZsCjKOFDFN0NwZ413zQJcBrkQ8ZY3QhOxiVsgz8hxQpmmFvSGXYXqKepxHp3jaN0+VnMQsnDJAob5oUL4cAA==" length="2726779" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: nOl3NUvjX0ZnT+frhV6nAbCh2MlwdWyPPbvm8dRrGfA68kCsFreVQKscgwP55FM93elBPqb1aPr+qiZn50jnAQ==
-length: 9199
+edSignature: MyUqEik1O3Xjzt/I0ImNLz01FFNPOgIDoJwS4ZPFqUPbC8e871/f8JqilGHJeKAvFcP7N8A4bD9UunrKCRuqBw==
+length: 9430
 -->

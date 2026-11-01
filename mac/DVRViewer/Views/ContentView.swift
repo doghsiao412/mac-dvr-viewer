@@ -48,6 +48,8 @@ struct ContentView: View {
             }
             .animation(.snappy, value: store.toast)
         }
+        // 關閉視窗後 App 仍在背景執行：重新打開主視窗時從靜音開始，並依設定決定是否回到上次的畫面
+        .onAppear { store.mainWindowOpened() }
         .toolbar {
             if !store.devices.isEmpty {
                 ToolbarItem(placement: .navigation) { DeviceSwitcher() }

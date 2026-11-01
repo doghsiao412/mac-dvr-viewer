@@ -18,6 +18,16 @@ struct SettingsView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                Section {
+                    Toggle("開啟時回到上次使用的畫面", isOn: $store.restoreLastPosition)
+                } header: {
+                    Text("啟動")
+                } footer: {
+                    Text(store.restoreLastPosition
+                         ? "開啟 App 時回到上次看的畫面（即時影像或錄影回放、哪台 DVR、自訂畫面）。聲音一律從靜音開始。"
+                         : "開啟 App 時一律顯示第一台 DVR 的即時影像。聲音一律從靜音開始。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section("聲音") {
                     LabeledContent("音量") {
                         Slider(value: $store.volume, in: 0...1)
