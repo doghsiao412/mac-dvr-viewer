@@ -69,7 +69,7 @@ struct PlaybackView: View {
     /// 標題列與時間軸放在畫面上下方，不遮住影像（1 分割、4 分割相同）。
     /// 全螢幕隱藏介面時影像滿版，滑鼠移動才浮出標題列與控制列。
     @ViewBuilder private var layoutBody: some View {
-        if store.immersive {
+        if store.chromeHidden {
             immersiveBody
         } else {
             normalBody

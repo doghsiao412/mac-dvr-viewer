@@ -145,6 +145,8 @@ final class AppStore {
 
     /// 全螢幕並隱藏介面（側邊欄、工具列、外框），只留影像
     var immersive = false
+    /// 介面實際是否已隱藏：等視窗全螢幕動畫完成後才切換，避免 macOS 版面計算錯誤
+    var chromeHidden = false
 
     // 提示訊息
     var toast: String?

@@ -49,11 +49,11 @@ struct LiveGridView: View {
         }
         // 與回放一致：影像區黑底圓角，外框跟隨淺色／深色模式
         // 全螢幕隱藏介面時滿版、無外框
-        .clipShape(RoundedRectangle(cornerRadius: store.immersive ? 0 : 14))
-        .padding(.horizontal, store.immersive ? 0 : 16)
-        .padding(.top, store.immersive ? 0 : 8)
-        .padding(.bottom, store.immersive ? 0 : 12)
-        .background(store.immersive ? Color.black : Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: store.chromeHidden ? 0 : 14))
+        .padding(.horizontal, store.chromeHidden ? 0 : 16)
+        .padding(.top, store.chromeHidden ? 0 : 8)
+        .padding(.bottom, store.chromeHidden ? 0 : 12)
+        .background(store.chromeHidden ? Color.black : Color(nsColor: .windowBackgroundColor))
         .focusable()
         .focusEffectDisabled()
         .focused($gridFocused)

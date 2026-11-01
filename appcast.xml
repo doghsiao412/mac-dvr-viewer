@@ -4,12 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.4.1</title>
-      <pubDate>Sun, 01 Nov 2026 08:35:21 GMT</pubDate>
-      <sparkle:version>23</sparkle:version>
-      <sparkle:shortVersionString>1.4.1</sparkle:shortVersionString>
+      <title>DVR Viewer 1.4.2</title>
+      <pubDate>Sun, 01 Nov 2026 08:39:59 GMT</pubDate>
+      <sparkle:version>24</sparkle:version>
+      <sparkle:shortVersionString>1.4.2</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.4.1
+      <description sparkle:format="markdown"><![CDATA[v1.4.2
+
+- 修正進入或離開全螢幕（隱藏介面）後，介面版面跑掉的問題：改為等全螢幕動畫完成後才隱藏或恢復工具列與側邊欄。
+- 全螢幕時影像延伸到螢幕最上方，不再保留標題列的黑色空間，分割畫面可使用整個螢幕。
+
+v1.4.1
 
 - 修正即時影像從 16 分割切回 9 分割（或其他分割數）時，畫面版面跑掉的問題。
 
@@ -149,11 +154,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.4.1/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.4.1/DVR-Viewer-1.4.1.dmg" sparkle:edSignature="KEjOeY+lWubJfRs9BARYmvxfu5K4qjNbshkmps1bxpDAt4zbM74H/ul2XNwvQu+B+orEa0gbmqaXuqg+L3KDBA==" length="2793352" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.4.2/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.4.2/DVR-Viewer-1.4.2.dmg" sparkle:edSignature="RdPbzy4vP0S+aw6OQVac5xjwAB3QnGXSiBUn9Gkrmko49CuUlIpLn2LW2STWoU4nBeT67mR0UckKOIAzvNJ9DQ==" length="2797874" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: RpZ+eLLkH9saX/rEhTURqqosTkTFxtcdxw0JfyuEKIQvigwQ+Za1QAtmORZsk/BXNhd+mS2IWvSJlbY8sEoXCQ==
-length: 9820
+edSignature: k/YUHS4AYZhz8iJ+MrdEBvrU0tCJ9XnAC0yJustdBquc3IBDY+TtgA2ryRiy3ZlmX39FCqanmjbzrt8b9CfpCQ==
+length: 10114
 -->

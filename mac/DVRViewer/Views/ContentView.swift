@@ -53,15 +53,22 @@ struct ContentView: View {
                 }
             }
             .animation(.snappy, value: store.toast)
+            // 隱藏介面時延伸到螢幕頂端（不保留標題列的空間）
+            .ignoresSafeArea(.container, edges: store.chromeHidden ? .all : [])
         }
         // 關閉視窗後 App 仍在背景執行：重新打開主視窗時從靜音開始，並依設定決定是否回到上次的畫面
         .onAppear { store.mainWindowOpened() }
         .background(WindowReader { if window !== $0 { window = $0 } })
-        .toolbar(store.immersive ? .hidden : .automatic, for: .windowToolbar)
+        .toolbar(store.chromeHidden ? .hidden : .automatic, for: .windowToolbar)
         .onChange(of: store.immersive) { _, on in applyImmersive(on) }
-        // 從綠色按鈕或 ⌃⌘F 離開系統全螢幕：一併恢復介面
+        // 全螢幕動畫完成後才隱藏介面
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { n in
+            if store.immersive, (n.object as? NSWindow) === window { hideChrome() }
+        }
+        // 離開全螢幕動畫完成後才恢復介面；從綠色按鈕或 ⌃⌘F 離開時也一併恢復
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { n in
-            if store.immersive, (n.object as? NSWindow) === window { wasFullScreen = true; store.immersive = false }
+            guard (n.object as? NSWindow) === window else { return }
+            if store.immersive { store.immersive = false } else { showChrome() }
         }
         // 全螢幕時滑鼠靜止 3 秒隱藏游標
         .onContinuousHover { _ in if store.immersive { cursorHider.poke() } }
@@ -156,19 +163,47 @@ struct ContentView: View {
 }
 
 extension ContentView {
-    /// 進入／離開隱藏介面：切換系統全螢幕並收合側邊欄
+    /// 進入／離開隱藏介面。順序：先切換系統全螢幕，動畫完成（didEnter／didExit）後才隱藏或恢復工具列與側邊欄。
+    /// 兩者同時進行時 macOS 會把版面算錯（工具列與內容重疊、畫面偏移）。
     func applyImmersive(_ on: Bool) {
         if on {
             savedColumns = columns
             wasFullScreen = window?.styleMask.contains(.fullScreen) ?? false
-            withAnimation(.snappy) { columns = .detailOnly }
-            if let w = window, !wasFullScreen { w.toggleFullScreen(nil) }
+            if let w = window, !wasFullScreen {
+                w.toggleFullScreen(nil)
+                // 保險：若沒有收到全螢幕完成通知，稍後仍隱藏介面
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    if store.immersive && !store.chromeHidden { hideChrome() }
+                }
+            } else {
+                hideChrome()
+            }
             store.showToast("按 Esc 離開全螢幕")
         } else {
             cursorHider.stop()
-            withAnimation(.snappy) { columns = savedColumns == .detailOnly ? .automatic : savedColumns }
-            if let w = window, !wasFullScreen, w.styleMask.contains(.fullScreen) { w.toggleFullScreen(nil) }
+            if let w = window, !wasFullScreen, w.styleMask.contains(.fullScreen) {
+                w.toggleFullScreen(nil)   // 介面在 didExitFullScreen 時恢復
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    if !store.immersive && store.chromeHidden { showChrome() }
+                }
+            } else {
+                showChrome()
+            }
         }
+    }
+
+    func hideChrome() {
+        guard !store.chromeHidden else { return }
+        columns = .detailOnly
+        store.chromeHidden = true
+    }
+
+    func showChrome() {
+        guard store.chromeHidden else { return }
+        store.chromeHidden = false
+        columns = savedColumns == .detailOnly ? .automatic : savedColumns
     }
 }
 
