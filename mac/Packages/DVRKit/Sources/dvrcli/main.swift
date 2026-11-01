@@ -908,6 +908,36 @@ func run() async -> Int32 {
         await conn.disconnect()
         return 0
     }
+    if cmd == "overlap" {
+        // overlap [頻道序號] [--service-port P]：模擬放大畫面——同一頻道開新任務後再關閉舊任務，新任務須持續有影像
+        let sp = args.int("service-port", 6036)
+        let chNo = (Int(rest.first ?? "") ?? 1) - 1
+        let guid = String(format: "{%08X-0000-0000-0000-000000000000}", chNo + 1)
+        let c = TVTPrivateClient(host: host, port: sp)
+        func count(_ s: AsyncThrowingStream<Data, Error>, seconds: Double) async -> (Int, String) {
+            let box = Task { () -> (Int, String) in
+                var n = 0
+                do { for try await _ in s { n += 1 } } catch { return (n, "\(error)") }
+                return (n, Task.isCancelled ? "到時" : "串流已結束")
+            }
+            try? await Task.sleep(for: .seconds(seconds))
+            box.cancel()
+            return await box.value
+        }
+        do {
+            try await c.connect(user: user, password: try devPassword(user: user, host: host))
+            let a = try await c.openLive(channelGUID: guid, chNo: chNo, streamType: 2)
+            let (na, _) = await count(a.frames, seconds: 3)
+            print("■ 舊任務 3 秒：\(na) 個訊框")
+            let b = try await c.openLive(channelGUID: guid, chNo: chNo, streamType: 2)
+            await c.closeLive(channelGUID: guid, chNo: chNo, task: a.task)
+            let (nb, why) = await count(b.frames, seconds: 6)
+            print("■ 關閉舊任務後，新任務 6 秒：\(nb) 個訊框（\(nb > 0 && why != "串流已結束" ? "✅ 持續" : "❌ " + why)）")
+            await c.closeLive(channelGUID: guid, chNo: chNo, task: b.task)
+            await c.disconnect()
+        } catch { print("✖ \(error.localizedDescription)"); return 1 }
+        return 0
+    }
     if cmd == "privid" {
         // privid [--service-port P]：私有協定登入，列出設備 GUID 與回應中的可讀文字（辨識是哪一台設備）
         let sp = args.int("service-port", 6036)

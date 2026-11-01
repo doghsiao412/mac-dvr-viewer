@@ -45,7 +45,9 @@ public actor TVTPrivateClient {
     private var fragments: [UInt32: Data] = [:]
     private var nextId: UInt32 = 0
     private var pending: [UInt32: CheckedContinuation<Reply, Error>] = [:]
-    private var liveSinks: [UInt32: AsyncThrowingStream<Data, Error>.Continuation] = [:]  // SHFL offset 8（頻道序號 1 起）
+    /// 即時影像接收端，以頻道序號（SHFL offset 8，1 起）區分；同一頻道只送給最新開啟的任務。
+    /// 記下任務 GUID：舊任務關閉時（例如放大畫面時分割畫面那格關閉）不可把新任務的接收端一起關掉。
+    private var liveSinks: [UInt32: (task: Data, cont: AsyncThrowingStream<Data, Error>.Continuation)] = [:]
     private var taskSinks: [Data: AsyncThrowingStream<Data, Error>.Continuation] = [:]    // 回放任務 GUID
     private var readerTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
@@ -104,7 +106,7 @@ public actor TVTPrivateClient {
         link?.cancel(); link = nil
         for (_, c) in pending { c.resume(throwing: ClientError.disconnected) }
         pending = [:]
-        for (_, s) in liveSinks { s.finish(throwing: ClientError.disconnected) }
+        for (_, s) in liveSinks { s.cont.finish(throwing: ClientError.disconnected) }
         for (_, s) in taskSinks { s.finish(throwing: ClientError.disconnected) }
         liveSinks = [:]; taskSinks = [:]
     }
@@ -131,15 +133,15 @@ public actor TVTPrivateClient {
         let task = TVTGUID.random()
         let (stream, cont) = AsyncThrowingStream<Data, Error>.makeStream(bufferingPolicy: .bufferingNewest(240))
         let key = UInt32(chNo + 1)
-        liveSinks[key]?.finish()
-        liveSinks[key] = cont
+        liveSinks[key]?.cont.finish()
+        liveSinks[key] = (task, cont)
         let xml = "<?xml version='1.0' encoding='utf-8'?><request version='1.0' systemType='NVMS-9000' clientType='SYS'>"
             + "<destId>\(channelGUID)</destId><taskId>\(TVTGUID.string(task))</taskId><chNo>\(chNo)</chNo>"
             + "<audio>\(audio ? 1 : 0)</audio><streamType>\(streamType)</streamType></request>"
         do {
             _ = try await routed(sub: 0x505, dest: dest, task: task, op: 1, payload: Data(xml.utf8))
         } catch {
-            liveSinks[key] = nil
+            if liveSinks[key]?.task == task { liveSinks[key] = nil }
             cont.finish(throwing: error)
             throw error
         }
@@ -148,7 +150,9 @@ public actor TVTPrivateClient {
 
     public func closeLive(channelGUID: String, chNo: Int, task: Data) async {
         let key = UInt32(chNo + 1)
-        liveSinks[key]?.finish(); liveSinks[key] = nil
+        if let s = liveSinks[key], s.task == task {
+            s.cont.finish(); liveSinks[key] = nil
+        }
         guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { return }
         var p = Data(count: 76)
         p.putU32(UInt32(chNo + 1), at: 0)  // 頻道編號（1 起）
@@ -366,7 +370,7 @@ public actor TVTPrivateClient {
         case 0x0000_0006 where sub == 0x0001_0001:
             guard data.count >= 12 else { return }
             let ch = data.u32le(at: 8)
-            liveSinks[ch]?.yield(data)
+            liveSinks[ch]?.cont.yield(data)
         case 0x0002_0006:
             guard data.count >= 72 else { return }
             let task = data.subdata(in: (data.startIndex + 52)..<(data.startIndex + 68))
