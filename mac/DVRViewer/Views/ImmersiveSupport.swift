@@ -60,6 +60,8 @@ enum UITestHarness {
     static let outputDir = ProcessInfo.processInfo.environment["DVRVIEWER_UITEST"]
     static var enabled: Bool { outputDir != nil }
     static var gridFrame: CGRect = .zero
+    /// DVRVIEWER_UITEST_SCENE=transcript：回放頁並開啟逐字稿面板（只截圖，不進全螢幕）
+    static let scene = ProcessInfo.processInfo.environment["DVRVIEWER_UITEST_SCENE"]
     private static var started = false
 
     static func startIfRequested(window: NSWindow, store: AppStore) {
@@ -95,6 +97,14 @@ enum UITestHarness {
             // DVRVIEWER_UITEST_SIZE=寬x高：模擬小螢幕（例如 720p 電視）
             if let sz = ProcessInfo.processInfo.environment["DVRVIEWER_UITEST_SIZE"]?.split(separator: "x").compactMap({ Double($0) }), sz.count == 2 {
                 window.setFrame(NSRect(x: 0, y: 0, width: sz[0], height: sz[1]), display: true)
+            }
+            if scene == "transcript" {
+                store.mode = .playback
+                try? await Task.sleep(for: .seconds(5))
+                snap("transcript")
+                try? log.write(to: URL(fileURLWithPath: dir).appending(path: "layout.txt"), atomically: true, encoding: .utf8)
+                NSApp.terminate(nil)
+                return
             }
             try? await Task.sleep(for: .seconds(4))
             snap("0-一般")

@@ -9,6 +9,8 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>DVR Viewer 需要連線到區域網路內的 DVR／NVR 以觀看即時影像與錄影。</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>DVR Viewer 使用 Mac 內建的語音辨識，把錄影中的對話轉成逐字稿；全部在本機處理，不會上傳。</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>

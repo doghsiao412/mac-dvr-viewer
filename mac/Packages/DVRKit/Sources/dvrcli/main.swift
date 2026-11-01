@@ -481,6 +481,50 @@ func imageStats(_ img: CGImage) -> String {
     return String(format: "%dx%d 亮度平均 %.1f 標準差 %.1f %@", img.width, img.height, m, sd, sd > 4 ? "✅" : "⚠️ 可能異常")
 }
 
+/// transcribe <頻道> "yyyy-MM-dd HH:mm:ss" <秒數> [--summary]
+/// 只印統計（句數、涵蓋時間、字數），不印逐字稿內容（監視錄音屬隱私，驗證時不讀內容）
+func runTranscribe(host: String, port: Int, user: String, rest: [String], args: Args) async -> Int32 {
+    let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+    do {
+        let chls = try await conn.connect()
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        guard rest.count >= 3, let n = Int(rest[0]), n >= 1, n <= chls.count, let start = f.date(from: rest[1]),
+              let secs = Double(rest[2]) else {
+            print("用法：transcribe <頻道> \"yyyy-MM-dd HH:mm:ss\" <秒數> [--summary]"); return 1
+        }
+        let ch = chls[n - 1]
+        let end = start.addingTimeInterval(secs)
+        print("■ 逐字稿 #\(n)：\(rest[1]) 起 \(Int(secs)) 秒；語音辨識\(await RecordingTranscriber.isAvailable() ? "可用" : "❌ 不可用")")
+        let t0 = ContinuousClock.now
+        let lines = try await RecordingTranscriber.transcribe(connection: conn, channelId: ch.id, start: start, end: end) { _ in }
+        let tf = DateFormatter(); tf.dateFormat = "HH:mm:ss"
+        let chars = lines.reduce(0) { $0 + $1.text.count }
+        let inRange = lines.allSatisfy { $0.start >= start.addingTimeInterval(-1) && $0.end <= end.addingTimeInterval(1) && $0.start <= $0.end }
+        let ordered = zip(lines, lines.dropFirst()).allSatisfy { $0.start <= $1.start }
+        let st = RecordingTranscriber.lastStats
+        print("   聲音 \(st.frames) 框、\(String(format: "%.1f", st.seconds)) 秒，其中音量明顯 \(String(format: "%.1f", st.loudSeconds)) 秒，最大 RMS \(Int(st.peakRMS))")
+        print("   句數 \(lines.count)、總字數 \(chars)、耗時 \(t0.duration(to: .now))")
+        if let a = lines.first, let b = lines.last {
+            print("   第一句 \(tf.string(from: a.start))、最後一句 \(tf.string(from: b.start))–\(tf.string(from: b.end))")
+        }
+        print("   時間都在範圍內：\(inRange ? "✅" : "❌")；依時間排序：\(ordered ? "✅" : "❌")")
+        if args.bool("summary") {
+            if let why = TranscriptSummarizer.unavailableReason { print("   摘要：❌ \(why)") }
+            else if lines.isEmpty { print("   摘要：略過（沒有句子）") }
+            else {
+                let s = try await TranscriptSummarizer.summarize(lines)
+                print("   摘要：✅ \(s.count) 字（內容不顯示）")
+            }
+        }
+        await conn.disconnect()
+        return 0
+    } catch {
+        print("✖ \(error)")
+        await conn.disconnect()
+        return 1
+    }
+}
+
 func runExport(host: String, port: Int, user: String, rest: [String], args: Args) async -> Int32 {
     let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
     do {
@@ -957,6 +1001,9 @@ func run() async -> Int32 {
     if cmd == "audioscan" { return await runAudioScan(host: host, port: port, user: user, args: args) }
     if cmd == "audiotest" {
         return await runAudioTest(host: host, port: port, user: user, rest: rest, args: args)
+    }
+    if cmd == "transcribe" {
+        return await runTranscribe(host: host, port: port, user: user, rest: rest, args: args)
     }
     if cmd == "export" {
         return await runExport(host: host, port: port, user: user, rest: rest, args: args)

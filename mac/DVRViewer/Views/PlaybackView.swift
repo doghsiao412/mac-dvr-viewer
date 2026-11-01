@@ -28,6 +28,9 @@ struct PlaybackView: View {
     @State private var dropTarget: Int?
     /// 全螢幕隱藏介面時，滑鼠移動才顯示標題列與控制列
     @State private var chrome = IdleHider()
+    /// 逐字稿（右側面板；關閉後保留結果）
+    @State private var transcript = TranscriptModel()
+    @State private var showTranscript = false
 
     private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16]
 
@@ -53,9 +56,19 @@ struct PlaybackView: View {
             await loadEvents()
         }
         .onChange(of: day) { markIn = nil; markOut = nil }
+        #if DEBUG
+        .onAppear { if UITestHarness.scene == "transcript" { showTranscript = true } }
+        #endif
         .onChange(of: store.playbackFocus, initial: true) { _, i in controller.setFocus(store.playbackLayout == 1 ? 0 : i) }
         .onDisappear { controller.stop() }
         .onChange(of: store.volume, initial: true) { _, v in controller.setVolume(v) }
+        .inspector(isPresented: $showTranscript) {
+            TranscriptPanel(model: transcript, ref: store.playbackRef, name: { store.name(of: $0) },
+                            markedRange: markedRange, current: controller.currentTime,
+                            connection: store.playbackRef.flatMap { store.device($0.deviceID) }?.connection,
+                            onPick: { ref, t in pickTranscriptLine(ref, t) })
+                .inspectorColumnWidth(min: 300, ideal: 360, max: 520)
+        }
         .sheet(isPresented: $showExport) {
             if let ref = store.playbackRef {
                 ExportSheet(ref: ref,
@@ -104,7 +117,7 @@ struct PlaybackView: View {
             .onAppear { chrome.poke() }
             .onDisappear { chrome.stop() }
             // 彈出事件清單、下載視窗時不要隱藏
-            .onChange(of: showEvents || showExport) { _, open in chrome.pinned = open }
+            .onChange(of: showEvents || showExport || showTranscript) { _, open in chrome.pinned = open }
     }
 
     private var normalBody: some View {
@@ -461,11 +474,18 @@ struct PlaybackView: View {
                 Button("清除標記") { markIn = nil; markOut = nil }
                     .disabled(markIn == nil && markOut == nil)
             } label: {
+                // 選單的標籤在只顯示圖示時會被省略：直接放圖示
                 toolLabel("標記", "bracket.square.left.fill", labels)
             }
-            .menuStyle(.borderlessButton)
+            // 用按鈕樣式的選單：無邊框選單在只顯示圖示時會把圖示省略
+            .menuStyle(.button)
+            .buttonStyle(.borderless)
+            .menuIndicator(.hidden)
             .fixedSize()
             .help("標記下載範圍：播放到開頭按 I、到結尾按 O；或按住 Shift 在時間軸上拖曳")
+            Button { showTranscript.toggle() } label: { toolLabel("逐字稿 Beta", "text.quote", labels) }
+                .help("（Beta）把這段錄影的對話轉成文字（T）")
+                .keyboardShortcut("t", modifiers: [])
             Button { snapshot() } label: { toolLabel("截圖", "camera", labels) }
                 .help("截圖")
             Button { showExport = true } label: { toolLabel("下載", "arrow.down.circle", labels) }
@@ -603,7 +623,16 @@ struct PlaybackView: View {
         }
     }
 
+    /// 點逐字稿的句子：4 分割時先選取該攝影機的格子，再跳到該句前 1 秒
+    private func pickTranscriptLine(_ ref: CameraRef, _ t: Date) {
+        if store.playbackLayout > 1, let i = store.playbackSlots.firstIndex(of: ref) { store.focusPlayback(i) }
+        startOrSeek(t.addingTimeInterval(-1), snap: false)
+    }
+
     private func startOrSeek(_ t: Date, reopen: Bool = false, snap: Bool = true) {
+        #if DEBUG
+        if UITestHarness.enabled { return }   // 版面測試：不播放影像
+        #endif
         // 點到沒有錄影的空白處：跳到下一段錄影的開頭
         var target = t
         if snap, !ranges.contains(where: { $0.start <= t && t < $0.end }), let next = ranges.first(where: { $0.start > t }) {
