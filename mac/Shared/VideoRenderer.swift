@@ -85,18 +85,33 @@ struct VideoSurface: NSViewRepresentable {
             h.hosted?.removeFromSuperlayer()
             h.hosted = renderer.layer
             v.layer?.addSublayer(renderer.layer)
-            h.needsLayout = true
         }
+        (v as? LayerHostView)?.syncFrame()
     }
 
+    /// 影像圖層永遠填滿這個 View。分割數改變時 SwiftUI 只改 frame，
+    /// 不一定會呼叫 layout()，所以在 frame 改變時也同步（並讓圖層隨父層自動縮放）。
     final class LayerHostView: NSView {
-        var hosted: CALayer?
-        override func layout() {
-            super.layout()
+        var hosted: CALayer? {
+            didSet { hosted?.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]; syncFrame() }
+        }
+
+        func syncFrame() {
+            guard let hosted, hosted.frame != bounds else { return }
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            hosted?.frame = bounds
+            hosted.frame = bounds
             CATransaction.commit()
+        }
+
+        override func layout() {
+            super.layout()
+            syncFrame()
+        }
+
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            syncFrame()
         }
     }
 }

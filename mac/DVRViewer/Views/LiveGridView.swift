@@ -24,19 +24,23 @@ struct LiveGridView: View {
                     }
             } else {
                 let n = Int(Double(store.gridLayout).squareRoot())
-                let w = (geo.size.width - CGFloat(n + 1) * 2) / CGFloat(n)
-                let h = (geo.size.height - CGFloat(n + 1) * 2) / CGFloat(n)
-                Grid(horizontalSpacing: 2, verticalSpacing: 2) {
+                let w = max(1, (geo.size.width - CGFloat(n + 1) * 2) / CGFloat(n))
+                let h = max(1, (geo.size.height - CGFloat(n + 1) * 2) / CGFloat(n))
+                // 以固定大小的格子排列（不用 Grid：欄數變少時 Grid 可能沿用舊的欄寬）。
+                // 格子以序號為身分，切換分割數時同一格的畫面不會重開。
+                VStack(spacing: 2) {
                     ForEach(0..<n, id: \.self) { r in
-                        GridRow {
+                        HStack(spacing: 2) {
                             ForEach(0..<n, id: \.self) { c in
                                 LiveSlotView(slot: r * n + c)
                                     .frame(width: w, height: h)
+                                    .id(r * n + c)
                             }
                         }
                     }
                 }
                 .padding(2)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
             }
         }
         .background(Color.black)

@@ -44,6 +44,7 @@
     * 首頁「編輯」後點設備沒反應：編輯模式下連結會被停用。改為編輯模式點設備打開「編輯 DVR」，並加上左側刪除鈕（模擬器確認）。
   * 之後可做：多台 DVR 的自訂 4 分割、回放 4 分割、TestFlight 發佈（需付費 Apple Developer Program）。
 
+* **1.4.1 已發佈（build 23）**：修正切換分割數後版面跑掉（VideoSurface 圖層隨 frame 同步、即時分割改用 VStack／HStack）；待使用者確認。
 * **1.4 已發佈（build 22）**：全螢幕隱藏介面（`store.immersive`、`ImmersiveSupport.swift`）。
 * **1.3.2 已發佈（build 21）**：主視窗出現時一律靜音；設定新增「開啟時回到上次使用的畫面」（`restoreLastPosition`，預設開）。
 * **1.3.1 已發佈（build 20）**：修正放大畫面時私有協定串流被舊格子關閉而中斷（TVTPrivateClient 接收端記下任務 GUID）；dvrcli `overlap` 驗證。
