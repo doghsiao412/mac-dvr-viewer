@@ -674,7 +674,7 @@ func runAudioTest(host: String, port: Int, user: String, rest: [String], args: A
             p.setAudio(true)
             try await Task.sleep(for: .seconds(6))
             let a1 = p.audioPlayer.fedFrames
-            print("   聲音開啟 6 秒：影像累計 \(c.snap().0) 幀、聲音 \(a1) 個（\(p.audioPlayer.detectedMuLaw.map { $0 ? "μ-law" : "A-law" } ?? "未判定")）")
+            print("   聲音開啟 6 秒：影像累計 \(c.snap().0) 幀、聲音 \(a1) 個（\(p.audioPlayer.encoding == .muLaw ? "μ-law" : "A-law")）")
             p.setAudio(false)
             try await Task.sleep(for: .seconds(3))
             print("   聲音再關閉 3 秒：聲音增加 \(max(p.audioPlayer.fedFrames - a1, 0)) 個（應為 0）")
@@ -688,7 +688,7 @@ func runAudioTest(host: String, port: Int, user: String, rest: [String], args: A
             p.setAudio(true)
             p.play(from: start)
             try await Task.sleep(for: .seconds(6))
-            print("   回放 1× 6 秒：影像 \(c.snap().0) 幀、聲音 \(p.audioPlayer.fedFrames) 個（\(p.audioPlayer.detectedMuLaw.map { $0 ? "μ-law" : "A-law" } ?? "未判定")）")
+            print("   回放 1× 6 秒：影像 \(c.snap().0) 幀、聲音 \(p.audioPlayer.fedFrames) 個（\(p.audioPlayer.encoding == .muLaw ? "μ-law" : "A-law")）")
             let a1 = p.audioPlayer.fedFrames
             p.setSpeed(2)
             try await Task.sleep(for: .seconds(3))

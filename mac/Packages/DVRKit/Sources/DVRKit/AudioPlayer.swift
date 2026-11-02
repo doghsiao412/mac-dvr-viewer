@@ -4,7 +4,7 @@ import Foundation
 /// DVR 聲音播放：G.711（A-law／μ-law）→ Float32 → AVAudioEngine。
 ///
 /// - 實測 TVT DVR 為 G.711 A-law、8000 Hz、單聲道，每個訊框 320 取樣（40 毫秒）
-/// - 以前 50 個訊框的靜音值判斷 A-law（0xD5/0x55）或 μ-law（0xFF/0x7F）
+/// - 編碼由呼叫端指定，預設與錄影下載相同的 A-law；不能靠取樣值猜測編碼
 /// - 可在任何執行緒呼叫 `feed`
 public final class AudioPlayer: @unchecked Sendable {
     private let lock = NSLock()
@@ -14,18 +14,24 @@ public final class AudioPlayer: @unchecked Sendable {
     private var sampleRate: Double = 8000
     private var queued = 0
     private var _volume: Float = 1
-    private var muLaw: Bool?
-    private var hist = (alaw: 0, mulaw: 0)
+    public enum Encoding: Sendable {
+        case aLaw, muLaw
+
+        func decode(_ byte: UInt8) -> Float {
+            Float(self == .muLaw ? G711.ulaw(byte) : G711.alaw(byte)) / 32768
+        }
+    }
+
+    public let encoding: Encoding
 
     private var _fed = 0
     /// 已送入的聲音訊框數（測試／診斷用）
     public var fedFrames: Int { lock.withLock { _fed } }
-    public var detectedMuLaw: Bool? { lock.withLock { muLaw } }
 
     /// 佇列上限（秒）：超過就丟棄，避免即時聲音延遲越來越大
     public var maxLatency: Double = 0.6
 
-    public init() {}
+    public init(encoding: Encoding = .aLaw) { self.encoding = encoding }
     deinit { stop() }
 
     public var volume: Float {
@@ -37,7 +43,6 @@ public final class AudioPlayer: @unchecked Sendable {
         guard !data.isEmpty else { return }
         lock.lock(); defer { lock.unlock() }
         _fed += 1
-        detectLaw(data)
         if engine == nil || Double(rate) != sampleRate { start(rate: Double(rate)) }
         guard let node, let format else { return }
         let maxFrames = Int(sampleRate * maxLatency)
@@ -45,10 +50,9 @@ public final class AudioPlayer: @unchecked Sendable {
         guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(data.count)) else { return }
         buf.frameLength = AVAudioFrameCount(data.count)
         let out = buf.floatChannelData![0]
-        let mu = muLaw ?? false
         data.withUnsafeBytes { raw in
             let b = raw.bindMemory(to: UInt8.self)
-            for i in 0..<b.count { out[i] = Float(mu ? G711.ulaw(b[i]) : G711.alaw(b[i])) / 32768 }
+            for i in 0..<b.count { out[i] = encoding.decode(b[i]) }
         }
         queued += data.count
         let n = data.count
@@ -102,15 +106,6 @@ public final class AudioPlayer: @unchecked Sendable {
         try? s.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
         try? s.setActive(true)
         #endif
-    }
-
-    private func detectLaw(_ d: Data) {
-        guard muLaw == nil else { return }
-        for x in d.prefix(64) {
-            if x == 0xD5 || x == 0x55 { hist.alaw += 1 }
-            if x == 0xFF || x == 0x7F { hist.mulaw += 1 }
-        }
-        if hist.alaw + hist.mulaw > 800 { muLaw = hist.mulaw > hist.alaw }
     }
 }
 

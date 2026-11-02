@@ -11,7 +11,7 @@ struct PlaybackView: View {
     @State private var loadingRanges = false
     @State private var rangeError: String?
     @State private var nearby: (before: Date?, after: Date?) = (nil, nil)
-    @State private var zoom: Double = 6  // 預設顯示 4 小時
+    @State private var timelineScale = TimelineScale()  // 預設顯示 4 小時
     /// 回放固定使用主串流（錄影本身即主串流；實測主子串流幀率相同）
     private let mainStream = true
     @State private var aspect: VideoAspect = .fit
@@ -322,7 +322,7 @@ struct PlaybackView: View {
 
     private var controls: some View {
         VStack(spacing: 4) {
-            RecordTimeline(day: day, ranges: ranges, current: controller.currentTime, zoom: $zoom,
+            PlaybackTimeline(controller: controller, day: day, ranges: ranges, scale: timelineScale,
                            markIn: markIn, markOut: markOut,
                            markers: events.filter { $0.ref == store.playbackRef && $0.event.source == .log }.map(\.event.start),
                            onSelect: { a, b in markIn = a; markOut = b }) { t in
@@ -342,11 +342,14 @@ struct PlaybackView: View {
 
                 transport.fixedSize()
 
-                ViewThatFits(in: .horizontal) {
-                    toolButtons(labels: true)
-                    toolButtons(labels: false)
+                // 只建立一套工具列。ViewThatFits 會建立、量測兩套帶有 Menu 的控制項，
+                // 選單追蹤期間容易反覆觸發原生控制項與 SwiftUI 的尺寸計算。
+                GeometryReader { geometry in
+                    toolButtons(labels: geometry.size.width >= 560)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                 }
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
             }
             // 隱藏的快捷鍵（I／O 標記起點、終點）
             .background {
@@ -366,12 +369,7 @@ struct PlaybackView: View {
     /// 左側：目前時間與圖例／標記範圍
     private var timeInfo: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if let t = controller.currentTime {
-                Text(t, format: .dateTime.hour().minute().second())
-                    .font(.title3.monospacedDigit().weight(.semibold))
-                Text(t, format: .dateTime.year().month().day())
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
+            PlaybackTimeDisplay(controller: controller)
             if markIn != nil || markOut != nil {
                 markSummary
             } else {
@@ -437,24 +435,7 @@ struct PlaybackView: View {
     /// 右側：時間軸縮放、事件、標記、截圖、下載（空間不足時只顯示圖示）
     private func toolButtons(labels: Bool) -> some View {
         HStack(spacing: labels ? 14 : 10) {
-            HStack(spacing: 6) {
-                Button { zoomBy(1 / 2) } label: { Image(systemName: "minus.magnifyingglass") }
-                    .help("縮小時間軸（⌘－）")
-                    .keyboardShortcut("-", modifiers: [.command])
-                    .disabled(zoom <= RecordTimeline.zoomRange.lowerBound)
-                Menu(RecordTimeline.spanText(zoom: zoom)) {
-                    ForEach([(1.0, "24 小時"), (2, "12 小時"), (6, "4 小時"), (24, "1 小時"), (96, "15 分鐘"), (288, "5 分鐘"), (1440, "1 分鐘")], id: \.0) { z, label in
-                        Button(label) { zoom = z }
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("時間軸顯示範圍")
-                Button { zoomBy(2) } label: { Image(systemName: "plus.magnifyingglass") }
-                    .help("放大時間軸（⌘＋）")
-                    .keyboardShortcut("=", modifiers: [.command])
-                    .disabled(zoom >= RecordTimeline.zoomRange.upperBound)
-            }
+            TimelineZoomControls(scale: timelineScale)
             Divider().frame(height: 20)
             Button { showEvents.toggle() } label: { toolLabel("事件", "list.bullet.rectangle", labels) }
                 .help("移動偵測等事件清單（E）")
@@ -577,12 +558,6 @@ struct PlaybackView: View {
         controller.setAudio(!controller.audioOn)
     }
 
-    private func zoomBy(_ f: Double) {
-        withAnimation(.snappy(duration: 0.2)) {
-            zoom = min(max(zoom * f, RecordTimeline.zoomRange.lowerBound), RecordTimeline.zoomRange.upperBound)
-        }
-    }
-
     private func shiftDay(_ d: Int) {
         if let n = Calendar.current.date(byAdding: .day, value: d, to: day) { day = n }
     }
@@ -668,5 +643,37 @@ private extension View {
     /// 有內容時才可拖曳（空格不能拖）
     @ViewBuilder func draggableIf(_ token: String?) -> some View {
         if let token { draggable(token) } else { self }
+    }
+}
+
+/// 播放位置每秒更新多次：只讓時間文字與時間軸觀察它，避免整頁和選單持續重建。
+private struct PlaybackTimeDisplay: View {
+    let controller: MultiPlaybackController
+
+    var body: some View {
+        if let t = controller.currentTime {
+            Text(t, format: .dateTime.hour().minute().second())
+                .font(.title3.monospacedDigit().weight(.semibold))
+            Text(t, format: .dateTime.year().month().day())
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct PlaybackTimeline: View {
+    let controller: MultiPlaybackController
+    let day: Date
+    let ranges: [DVRConnection.RecordRange]
+    let scale: TimelineScale
+    let markIn: Date?
+    let markOut: Date?
+    let markers: [Date]
+    let onSelect: (Date, Date) -> Void
+    let onSeek: (Date) -> Void
+
+    var body: some View {
+        RecordTimeline(day: day, ranges: ranges, current: controller.currentTime, scale: scale,
+                       markIn: markIn, markOut: markOut, markers: markers,
+                       onSelect: onSelect, onSeek: onSeek)
     }
 }

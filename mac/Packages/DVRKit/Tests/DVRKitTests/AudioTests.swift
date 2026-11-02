@@ -18,6 +18,34 @@ struct AudioTests {
         #expect(G711.ulaw(0x00) == -32124)
     }
 
+    @Test func aLawToneDoesNotChangePlaybackEncoding() {
+        // 正常的 180 Hz A-law 音訊也含 FF/7F；舊統計法第 91 框會誤判 μ-law。
+        let codebook = (0...255).map { UInt8($0) }
+        let cycle = (0..<400).map { i -> UInt8 in
+            let sample = 850 * sin(2 * Double.pi * 180 * Double(i) / 8000)
+            return codebook.min { abs(Double(G711.alaw($0)) - sample) < abs(Double(G711.alaw($1)) - sample) }!
+        }
+        let player = AudioPlayer()  // 不啟動音訊裝置
+        var aLawVotes = 0, muLawVotes = 0
+        for frame in 0..<91 {
+            for i in 0..<320 {
+                let byte = cycle[(frame * 320 + i) % cycle.count]
+                if i < 64 {
+                    if byte == 0xD5 || byte == 0x55 { aLawVotes += 1 }
+                    if byte == 0xFF || byte == 0x7F { muLawVotes += 1 }
+                }
+                let sample = player.encoding.decode(byte)
+                #expect(sample == Float(G711.alaw(byte)) / 32768)
+                #expect(abs(sample) < 0.027)
+            }
+        }
+        #expect(aLawVotes + muLawVotes > 800)
+        #expect(muLawVotes > aLawVotes)
+        #expect(player.encoding == .aLaw)
+        #expect(AudioPlayer.Encoding.muLaw.decode(0xFF) == 0)
+        #expect(AudioPlayer.Encoding.aLaw.decode(0xFF) == Float(848) / 32768)
+    }
+
     @Test func parsesAudioFrame() throws {
         // 依 8083 實測：03 01 06 01 | ... | extLen 12 | 長度 320 | 延伸區 00 01 01 00 10 00 80 3e 40 1f 00 00
         var d = Data("SHFL".utf8) + Data([3, 1, 6, 1]) + Data([1, 0, 0, 0]) + Data(count: 12)

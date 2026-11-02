@@ -115,6 +115,7 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
 
     public func stepFrame() {
         lock.withLock { paused = true; stepRequested = true }
+        audioPlayer.flush()
     }
 
     public func setSpeed(_ newSpeed: Double) {
@@ -124,6 +125,7 @@ public final class PlaybackStreamPlayer: @unchecked Sendable {
             keyFrameMode = speed > 4
             return (stream, keyFrameMode, was, currentTime)
         }
+        if newSpeed != 1 { audioPlayer.flush() }
         if needKey != wasKey, let s, let t, let kf = s.setKeyFrameOnly {
             Task { await kf(needKey, t) }
         }

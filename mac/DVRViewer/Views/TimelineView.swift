@@ -17,7 +17,8 @@ struct RecordTimeline: View {
     let day: Date                       // 當日 00:00（本地時間）
     let ranges: [DVRConnection.RecordRange]
     let current: Date?
-    @Binding var zoom: Double           // 1 = 顯示 24 小時；1440 = 顯示 1 分鐘
+    let scale: TimelineScale
+    private var zoom: Double { scale.zoom }
     /// 下載範圍標記
     var markIn: Date? = nil
     var markOut: Date? = nil
@@ -106,6 +107,7 @@ struct RecordTimeline: View {
         .frame(height: 60)
         .padding(.top, 14)  // 給時間標籤空間
         .help("拖曳時間條選擇時間；捏合或滾輪縮放；按住 Shift 拖曳標記下載範圍")
+        .onDisappear { scrollSeekTask?.cancel() }
     }
 
     // MARK: - 互動
@@ -136,7 +138,7 @@ struct RecordTimeline: View {
     }
 
     private func setZoom(_ z: Double) {
-        zoom = min(max(z, Self.zoomRange.lowerBound), Self.zoomRange.upperBound)
+        scale.setZoom(z)
     }
 
     private func clamp(_ d: Date) -> Date { min(max(d, day), day.addingTimeInterval(86399)) }
@@ -241,6 +243,44 @@ struct TimelineEventCatcher: NSViewRepresentable {
 
         override func magnify(with e: NSEvent) {
             onMagnify(e.magnification)
+        }
+    }
+}
+
+/// 縮放只讓時間軸與縮放按鈕更新，避免每次滾輪事件重建整個回放頁。
+@Observable
+@MainActor
+final class TimelineScale {
+    private(set) var zoom: Double = 6
+
+    func setZoom(_ value: Double) {
+        guard value.isFinite else { return }
+        let z = min(max(value, TimelineStyle.zoomRange.lowerBound), TimelineStyle.zoomRange.upperBound)
+        if z != zoom { zoom = z }
+    }
+}
+
+struct TimelineZoomControls: View {
+    let scale: TimelineScale
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button { scale.setZoom(scale.zoom / 2) } label: { Image(systemName: "minus.magnifyingglass") }
+                .help("縮小時間軸（⌘－）")
+                .keyboardShortcut("-", modifiers: [.command])
+                .disabled(scale.zoom <= TimelineStyle.zoomRange.lowerBound)
+            Menu(TimelineStyle.spanText(zoom: scale.zoom)) {
+                ForEach([(1.0, "24 小時"), (2, "12 小時"), (6, "4 小時"), (24, "1 小時"), (96, "15 分鐘"), (288, "5 分鐘"), (1440, "1 分鐘")], id: \.0) { z, label in
+                    Button(label) { scale.setZoom(z) }
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("時間軸顯示範圍")
+            Button { scale.setZoom(scale.zoom * 2) } label: { Image(systemName: "plus.magnifyingglass") }
+                .help("放大時間軸（⌘＋）")
+                .keyboardShortcut("=", modifiers: [.command])
+                .disabled(scale.zoom >= TimelineStyle.zoomRange.upperBound)
         }
     }
 }

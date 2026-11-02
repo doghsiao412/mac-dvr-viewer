@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.5.2（build 28，2026-11-03）**：回放音訊移除內容猜編碼（指定片段確認誤切 μ-law），時間軸縮放與播放時間顯示拆成獨立 View／狀態，避免整頁高頻更新；逐格／非 1× 時清空殘留音訊。第二次時間軸修正：移除控制列 `ViewThatFits` 的兩套選單，改成依可用寬度只建立一套工具列；已實際操作確認播放中及暫停時選跨度、放大按鈕狀態正確，使用者已確認縮放「超順暢」，並確認聲音正常，兩項修正均通過使用者驗收。驗證與待確認項目見 `docs/test-results.md` 最後兩節。
+
 * **iPhone 版（試作 ①–④ 完成，已在 iPhone 實機驗證）**：計畫 ① DVRKit 支援 iOS → ② 新增 iPhone App 最小版（加入 DVR、頻道清單、單頻道即時影像）→ ③ 手機介面（4 分割、全螢幕、橫放、回放時間軸、事件、下載存到照片／檔案）→ ④ 平台差異（無 Sparkle 改 TestFlight／Xcode 安裝、Info.plist 開放 HTTP 與區域網路權限、切背景後自動重連）。
   * ✅ ①（2026-10-31）：Package 加 `.iOS(.v26)`；macOS 專屬的 `XMLDocument` 改為跨平台 `DVRXMLElement`（`XMLParser`）；`AudioPlayer` 在 iOS 設定 `AVAudioSession`（.playback）。iOS 編譯成功、macOS 測試與 App 編譯通過、dvrcli 對實體 DVR 結果不變。**尚未在 iPhone 實機執行。**
   * ✅ ②（2026-10-31，**使用者已在 iPhone 實機確認即時影像**）：同一個 Xcode 專案新增 target `DVRViewerPhone`（`mac/DVRViewerPhone/`，Bundle ID `local.dvrviewer.phone`，Personal Team 自動簽章）。Mac 與 iPhone 共用的檔案移到 `mac/Shared/`（DeviceConfig、DeviceModel、KeychainStore、VideoRenderer、PlayerControllers；`VideoSurface` 以 `#if os` 分 NSView／UIView）。畫面：DVR 清單（滑動編輯／刪除）→ 加入 DVR（測試登入後才儲存）→ 頻道清單（離線頻道不可點）→ 單頻道即時影像（流暢／高畫質、聲音、直放 16:9、橫放全螢幕點一下顯示控制、觀看時不自動鎖定）。iPhone 實機編譯、簽章、安裝成功；使用者在 iPhone 信任開發者後，加入 DVR 並看到即時影像。
