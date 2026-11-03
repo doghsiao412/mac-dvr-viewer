@@ -16,6 +16,7 @@ struct PlaybackView: View {
     private let mainStream = true
     @State private var aspect: VideoAspect = .fit
     @State private var showExport = false
+    @State private var showCalendar = false
     /// 事件清單（移動偵測等），對象為目前所有格子的攝影機
     @State private var events: [EventListView.Item] = []
     @State private var loadingEvents = false
@@ -117,7 +118,7 @@ struct PlaybackView: View {
             .onAppear { chrome.poke() }
             .onDisappear { chrome.stop() }
             // 彈出事件清單、下載視窗時不要隱藏
-            .onChange(of: showEvents || showExport || showTranscript) { _, open in chrome.pinned = open }
+            .onChange(of: showEvents || showExport || showTranscript || showCalendar) { _, open in chrome.pinned = open }
     }
 
     private var normalBody: some View {
@@ -153,11 +154,7 @@ struct PlaybackView: View {
             Button { shiftDay(-1) } label: { Image(systemName: "chevron.left") }
                 .buttonStyle(.borderless)
                 .help("前一天")
-            DatePicker("日期", selection: Binding(get: { day }, set: { day = Calendar.current.startOfDay(for: $0) }),
-                       displayedComponents: .date)
-                .labelsHidden()
-                .datePickerStyle(.field)
-                .frame(width: 120)
+            PlaybackDatePicker(selection: $day, isPresented: $showCalendar)
             Button { shiftDay(1) } label: { Image(systemName: "chevron.right") }
                 .buttonStyle(.borderless)
                 .help("後一天")

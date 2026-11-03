@@ -4,12 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.5.2</title>
-      <pubDate>Mon, 02 Nov 2026 17:18:58 GMT</pubDate>
-      <sparkle:version>28</sparkle:version>
-      <sparkle:shortVersionString>1.5.2</sparkle:shortVersionString>
+      <title>DVR Viewer 1.5.3</title>
+      <pubDate>Tue, 03 Nov 2026 04:55:10 GMT</pubDate>
+      <sparkle:version>29</sparkle:version>
+      <sparkle:shortVersionString>1.5.3</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.5.2
+      <description sparkle:format="markdown"><![CDATA[v1.5.3
+
+- 改善錄影回放日期選擇器，支援直接選擇年、月。
+- 支援 Magic Mouse 上下滾動換月，加入滑動過場動畫。
+
+v1.5.2
 
 - 修正部分場景爆音問題
 - 修正效能問題
@@ -176,11 +181,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5.2/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5.2/DVR-Viewer-1.5.2.dmg" sparkle:edSignature="Ht83pBic1pYANSfjY0wBKvKMo+7YTfa9zf/qJfPlN45LCDfCukztMvMJZR0Qik6PITbr7zQYIp1sMqW3E9+4AQ==" length="2947239" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5.3/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5.3/DVR-Viewer-1.5.3.dmg" sparkle:edSignature="ABjQUIai2QzfvkK1HSP7WTb1bVsWSv5eG2tJIJkFaALUXTnAFPDnB2f781eeuMw1QnwT3trJu4Tno1dclfaYBA==" length="3017229" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: EltmPVoltTeXqnmFK7FYp6sYI9uiEM0op4HktwQ5kwAQfcAdCcdW/nOMGf/ixAEM+23xOyiSOWbotaezUpUzBg==
-length: 11476
+edSignature: wfSSt5fEUEm/j5e6+OyXCIgzGNM2HyQLu0lMYBKYNvsrYCfbt1zjAl5S0GtQFLoWKzZMmBKLqSaVSihxZpyeBg==
+length: 11624
 -->
