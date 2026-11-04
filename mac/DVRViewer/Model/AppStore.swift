@@ -123,7 +123,8 @@ final class AppStore {
     }
 
     // 偏好設定
-    var useMainStreamWhenEnlarged: Bool = UserDefaults.standard.bool(forKey: "useMainStreamWhenEnlarged") {
+    /// 放大單一畫面時改用主串流（預設開啟；未曾設定過的使用者也套用預設）
+    var useMainStreamWhenEnlarged: Bool = (UserDefaults.standard.object(forKey: "useMainStreamWhenEnlarged") as? Bool) ?? true {
         didSet { UserDefaults.standard.set(useMainStreamWhenEnlarged, forKey: "useMainStreamWhenEnlarged") }
     }
 
@@ -558,9 +559,9 @@ final class AppStore {
 
     /// 放大時是否使用主串流（實測此 DVR 主串流遠端約 1 fps，故預設使用子串流）
     func wantsMainStream(slot: Int) -> Bool {
-        // 一般模式一律用子串流（此類 DVR 遠端看主串流約每秒 1 張）；進階功能才可切換
-        guard advancedFeatures else { return false }
-        if let r = gridSlots[slot], let v = cameraMainStream[r] { return v }
+        // 分割畫面用子串流（流暢）；放大單一畫面時依設定改用主串流（預設開啟）。
+        // 進階功能可逐支攝影機指定主／子串流，優先於上述規則
+        if advancedFeatures, let r = gridSlots[slot], let v = cameraMainStream[r] { return v }
         return enlargedSlot == slot && useMainStreamWhenEnlarged
     }
 

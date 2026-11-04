@@ -10,7 +10,7 @@ struct SettingsView: View {
             Form {
                 Section("進階功能") {
                     Toggle("顯示進階功能", isOn: $store.advancedFeatures)
-                    Text("一般不需要開啟，App 會自動使用最佳設定：即時影像用流暢的子串流，回放與下載用錄影原始畫質。開啟後可在畫面右鍵選單與攝影機視窗切換主／子串流。")
+                    Text("一般不需要開啟，App 會自動使用最佳設定：分割畫面用流暢的子串流、放大單一畫面時用主串流，回放與下載用錄影原始畫質。開啟後可在畫面右鍵選單與攝影機視窗切換主／子串流。")
                         .font(.caption).foregroundStyle(.secondary)
                     if store.advancedFeatures {
                         Toggle("放大單一畫面時使用主串流", isOn: $store.useMainStreamWhenEnlarged)
@@ -63,7 +63,7 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("更新") {
-                    Toggle("自動檢查更新（開啟 App 時及每天）", isOn: $updater.automaticallyChecks)
+                    Toggle("自動檢查更新（每天）", isOn: $updater.automaticallyChecks)
                     HStack {
                         Text("目前版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-")")
                             .foregroundStyle(.secondary)

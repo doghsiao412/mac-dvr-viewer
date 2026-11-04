@@ -4,12 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.5.3</title>
-      <pubDate>Tue, 03 Nov 2026 04:55:10 GMT</pubDate>
-      <sparkle:version>29</sparkle:version>
-      <sparkle:shortVersionString>1.5.3</sparkle:shortVersionString>
+      <title>DVR Viewer 1.5.4</title>
+      <pubDate>Wed, 04 Nov 2026 08:13:19 GMT</pubDate>
+      <sparkle:version>30</sparkle:version>
+      <sparkle:shortVersionString>1.5.4</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.5.3
+      <description sparkle:format="markdown"><![CDATA[v1.5.4
+
+- 放大單一畫面時預設改用高畫質的主串流（分割畫面仍用流暢的子串流），不需開啟進階功能。若某台 DVR 放大後變卡，可在設定的「進階功能」中關閉「放大單一畫面時使用主串流」。
+- 自動更新改回 Sparkle 預設的更新視窗與檢查方式（每天自動檢查一次，可在設定關閉）。
+
+v1.5.3
 
 - 改善錄影回放日期選擇器，支援直接選擇年、月。
 - 支援 Magic Mouse 上下滾動換月，加入滑動過場動畫。
@@ -181,11 +186,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5.3/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5.3/DVR-Viewer-1.5.3.dmg" sparkle:edSignature="ABjQUIai2QzfvkK1HSP7WTb1bVsWSv5eG2tJIJkFaALUXTnAFPDnB2f781eeuMw1QnwT3trJu4Tno1dclfaYBA==" length="3017229" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5.4/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5.4/DVR-Viewer-1.5.4.dmg" sparkle:edSignature="gSZp9RvGjGL6OmzVYtu6ZkRveVrsX+wipZd/dDSo+3gS8wfGYHeCqhozb8vQnQ6yL3buvzc0/lvRpmkka8PkDg==" length="2974991" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: wfSSt5fEUEm/j5e6+OyXCIgzGNM2HyQLu0lMYBKYNvsrYCfbt1zjAl5S0GtQFLoWKzZMmBKLqSaVSihxZpyeBg==
-length: 11624
+edSignature: WG1vzG4NT/9Mt1MrsffWcwcIsJ7CBq5GdTmpiC+DLvuTGNS3E3syN8778k2ITfkO5ODDZmXA2Z7edaRZYaizBg==
+length: 12001
 -->
