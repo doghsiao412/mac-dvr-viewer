@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.5.5 已發佈（build 31）— 開啟 App 時檢查更新＋左下角提示**：開啟後 3 秒背景檢查（設定可關）；用 Sparkle 溫和提醒（`supportsGentleScheduledUpdateReminders`、`standardUserDriverShouldHandleShowingScheduledUpdate` 回 false），發現新版時在側邊欄左下角顯示「有新版本 X」，點一下打開標準更新視窗。手動「檢查更新…」仍直接顯示標準視窗。
+
 * **1.5.4 已發佈（build 30）— 放大單一畫面預設用主串流；自動更新改回 Sparkle 標準介面**（`SPUStandardUpdaterController`，移除自訂 DVRUserDriver／UpdateWindow、開啟時強制檢查與更新後提示）：`useMainStreamWhenEnlarged` 預設開啟（未設定過者套用預設），未開進階功能也套用；開關仍在「進階功能」內（預設開）。進階功能仍可逐支攝影機指定主／子串流。
 
 * **回放日期選擇器（1.5.3／build 29）**：日期按鈕改開較大的月曆，可直接選年／月、點日期後套用並收起；保留前後一天與今天。日期區上下滾動可切換月份，觸控板累積位移且忽略慣性，避免連續跳月；只瀏覽月份不查錄影。Mac 編譯及離線日期／版面檢查通過，使用者已確認 Magic Mouse 可換月並同意打包；換月已加入 0.2 秒滑動過場。

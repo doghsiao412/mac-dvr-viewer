@@ -98,6 +98,14 @@ enum UITestHarness {
             if let sz = ProcessInfo.processInfo.environment["DVRVIEWER_UITEST_SIZE"]?.split(separator: "x").compactMap({ Double($0) }), sz.count == 2 {
                 window.setFrame(NSRect(x: 0, y: 0, width: sz[0], height: sz[1]), display: true)
             }
+            if scene == "update" {
+                // 等開啟時的更新檢查完成，截取左下角提示
+                try? await Task.sleep(for: .seconds(12))
+                snap("update")
+                try? log.write(to: URL(fileURLWithPath: dir).appending(path: "layout.txt"), atomically: true, encoding: .utf8)
+                NSApp.terminate(nil)
+                return
+            }
             if scene == "transcript" {
                 store.mode = .playback
                 try? await Task.sleep(for: .seconds(5))

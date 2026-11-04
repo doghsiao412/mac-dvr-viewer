@@ -4,6 +4,7 @@ import SwiftUI
 struct SidebarView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.openWindow) private var openWindow
+    @EnvironmentObject private var updater: UpdaterModel
     @Binding var editor: DeviceEditorTarget?
     @State private var removing: DeviceModel?
 
@@ -41,6 +42,11 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        // 左下角：背景檢查發現新版時的提示
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            UpdateAvailableBanner(updater: updater)
+        }
+        .animation(.snappy, value: updater.availableVersion)
         .toolbar {
             ToolbarItem {
                 Button { editor = .new } label: { Label("加入 DVR", systemImage: "plus") }
