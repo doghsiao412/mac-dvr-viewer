@@ -23,6 +23,7 @@ extension Data {
 //   swift run dvrcli <host> <port> <user> playertest playback <頻道> "<yyyy-MM-dd HH:mm:ss>"
 //   swift run dvrcli <host> <port> <user> chcheck <yyyy-MM-dd>     # 逐頻道驗證回放頻道正確
 //   swift run dvrcli <host> <port> <user> export <頻道> "<yyyy-MM-dd HH:mm:ss>" <秒數> [--main]   # 下載錄影成 MP4
+//   swift run dvrcli <host> <port> <user> soak [N] [--hours 10] [--main]   # 長時間穩定性測試（只記數字）
 //   swift run dvrcli decode <captures/*.bin>              # 離線解碼，不連 DVR
 //   swift run dvrcli <host> <port> <user> raw <指令> [xml-inner]
 //
@@ -38,8 +39,10 @@ nonisolated(unsafe) var devPort: Int?
 
 func devPassword(user: String, host: String) throws -> String {
     // 依序嘗試 "user@host" 與 "user@host:port"
-    var accounts = ["\(user)@\(host)"]
-    if let devPort { accounts.append("\(user)@\(host):\(devPort)") }
+    // DVRCLI_KEYCHAIN_HOST：經本機轉發測試（host 為 127.0.0.1）時，仍用原本 DVR 的 Keychain 項目
+    let keyHost = ProcessInfo.processInfo.environment["DVRCLI_KEYCHAIN_HOST"] ?? host
+    var accounts = ["\(user)@\(keyHost)"]
+    if let devPort { accounts.append("\(user)@\(keyHost):\(devPort)") }
     for account in accounts {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
@@ -911,6 +914,95 @@ func runMultiPlayback(conn: DVRConnection, channels: [DVRChannel], start: Date, 
     try? await Task.sleep(for: .seconds(1))
 }
 
+/// 目前程序實際使用的記憶體（與「活動監視器」的記憶體欄相同：phys_footprint），單位 MB
+func memoryFootprintMB() -> Double {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+    let kr = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+    }
+    return kr == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : -1
+}
+
+/// 長時間穩定性測試：與 App 相同——N 個 LiveStreamPlayer 同時播放（解碼但不顯示）＋每 30 秒保活查詢在線頻道。
+/// 每分鐘列一行：各頻道這一分鐘的幀數、斷線重連次數、保活成功／失敗、記憶體。只記數字，不存影像。
+func runSoak(conn: DVRConnection, channels: [DVRChannel], hours: Double, main: Bool) async {
+    final class Stat: @unchecked Sendable {
+        let lock = NSLock()
+        var frames: [Int: Int] = [:]
+        var state: [Int: String] = [:]
+        var reconnects: [Int: Int] = [:]
+        var reasons: [String: Int] = [:]
+    }
+    let st = Stat()
+    let tf = DateFormatter(); tf.dateFormat = "MM-dd HH:mm"
+    let proto = await conn.usesPrivateProtocol ? "私有協定" : "WebSocket"
+    print("■ 穩定性測試開始 \(tf.string(from: Date()))：\(channels.count) 路\(main ? "主" : "子")串流（\(proto)），預計 \(hours) 小時；記憶體起始 \(String(format: "%.0f", memoryFootprintMB())) MB")
+    var players: [LiveStreamPlayer] = []
+    for ch in channels {
+        let n = ch.index + 1
+        let p = LiveStreamPlayer(connection: conn, channelId: ch.id, mainStream: main)
+        p.onFrame = { _, _ in st.lock.withLock { st.frames[n, default: 0] += 1 } }
+        p.onState = { s in
+            st.lock.withLock {
+                st.state[n] = "\(s)"
+                if case .reconnecting(let why) = s {
+                    st.reconnects[n, default: 0] += 1
+                    st.reasons[String(why.prefix(60)), default: 0] += 1
+                }
+            }
+        }
+        p.start(); players.append(p)
+    }
+    // 保活：與 App 的 DeviceModel 相同，每 30 秒查一次在線頻道（Session 失效時 DVRConnection 會自動重登）
+    final class Alive: @unchecked Sendable { let lock = NSLock(); var ok = 0; var fail = 0; var lastError = "" }
+    let alive = Alive()
+    let keepAlive = Task {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(30))
+            if Task.isCancelled { break }
+            do { _ = try await conn.onlineChannelIds(); alive.lock.withLock { alive.ok += 1 } }
+            catch { alive.lock.withLock { alive.fail += 1; alive.lastError = String(error.localizedDescription.prefix(60)) } }
+        }
+    }
+    let t0 = Date()
+    let mem0 = memoryFootprintMB()
+    var memPeak = mem0
+    var last: [Int: Int] = [:]
+    var minute = 0
+    var stalledMinutes = 0
+    while Date().timeIntervalSince(t0) < hours * 3600 {
+        try? await Task.sleep(for: .seconds(60))
+        minute += 1
+        let (f, s, r) = st.lock.withLock { (st.frames, st.state, st.reconnects) }
+        let (ok, fail, lastErr) = alive.lock.withLock { (alive.ok, alive.fail, alive.lastError) }
+        let mem = memoryFootprintMB(); memPeak = max(memPeak, mem)
+        var stalled = false
+        let row = channels.map { c -> String in
+            let n = c.index + 1; let d = (f[n] ?? 0) - (last[n] ?? 0)
+            if d == 0 { stalled = true }
+            return "\(n):\(d)" + ((s[n] ?? "").contains("playing") ? "" : "[\(s[n] ?? "-")]")
+        }
+        if stalled { stalledMinutes += 1 }
+        last = f
+        let rc = r.values.reduce(0, +)
+        print("\(tf.string(from: Date())) 第\(minute)分 \(row.joined(separator: " ")) | 重連累計 \(rc) | 保活 \(ok)✓ \(fail)✗\(fail > 0 ? "（\(lastErr)）" : "") | 記憶體 \(String(format: "%.0f", mem)) MB")
+    }
+    keepAlive.cancel()
+    players.forEach { $0.stop() }
+    try? await Task.sleep(for: .seconds(1))
+    let (r, reasons, f) = st.lock.withLock { (st.reconnects, st.reasons, st.frames) }
+    let (ok, fail, _) = alive.lock.withLock { (alive.ok, alive.fail, alive.lastError) }
+    let mins = max(1, Date().timeIntervalSince(t0) / 60)
+    print("■ 結束 \(tf.string(from: Date()))，共 \(Int(mins)) 分鐘")
+    print("   各頻道平均每秒幀數：" + channels.map { c in let n = c.index + 1; return "\(n):\(String(format: "%.1f", Double(f[n] ?? 0) / (mins * 60)))" }.joined(separator: " "))
+    print("   斷線重連：\(r.values.reduce(0, +)) 次 " + channels.compactMap { c in r[c.index + 1].map { "#\(c.index + 1)×\($0)" } }.joined(separator: " "))
+    for (why, n) in reasons.sorted(by: { $0.value > $1.value }) { print("     原因「\(why)」×\(n)") }
+    print("   有任一頻道整分鐘沒畫面：\(stalledMinutes) 分鐘")
+    print("   保活查詢：成功 \(ok)、失敗 \(fail)")
+    print("   記憶體：起始 \(String(format: "%.0f", mem0)) MB、最高 \(String(format: "%.0f", memPeak)) MB、結束 \(String(format: "%.0f", memoryFootprintMB())) MB")
+}
+
 func dayRange(_ day: String) -> (String, String, Date)? {
     let f = DateFormatter()
     f.dateFormat = "yyyy-MM-dd"
@@ -946,6 +1038,18 @@ func run() async -> Int32 {
             guard rest.count >= 2, let start = df.date(from: rest[1]) else { print("用法：multiplayback <N> \"yyyy-MM-dd HH:mm:ss\""); return 1 }
             await runMultiPlayback(conn: conn, channels: Array(chls.prefix(Int(rest[0]) ?? 4)), start: start,
                                    seconds: args.int("seconds", 20), speed: Double(args.flags["speed"] ?? "1") ?? 1)
+        } catch { print("✖ \(error.localizedDescription)"); return 1 }
+        await conn.disconnect()
+        return 0
+    }
+    if cmd == "soak" {
+        // soak [N] [--hours H] [--main]：長時間穩定性測試（N 路即時＋保活，每分鐘記錄幀數／重連／記憶體）
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036), autoDetectServicePort: args.flags["service-port"] == nil) { try devPassword(user: user, host: host) }
+        do {
+            let chls = try await conn.connect()
+            let online = (try? await conn.onlineChannelIds()) ?? Set(chls.map(\.id))
+            let use = Array(chls.filter { online.contains($0.id) }.prefix(Int(rest.first ?? "4") ?? 4))
+            await runSoak(conn: conn, channels: use, hours: Double(args.flags["hours"] ?? "10") ?? 10, main: args.bool("main"))
         } catch { print("✖ \(error.localizedDescription)"); return 1 }
         await conn.disconnect()
         return 0

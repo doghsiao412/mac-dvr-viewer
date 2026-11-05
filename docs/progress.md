@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **未發佈 — 整晚穩定性測試與斷網誤判修正（2026-11-05）**：新增 `dvrcli soak`（長時間穩定性測試，只記數字）。兩台 DVR 各 4 路跑 14 小時：記憶體無增長、兩次網路中斷都自動接回。修正網路中斷被誤判為「同時影像連線已達上限」（會跳設定提示、上限被永久調低）：`DVRConnection.openLive` 判定上限前先確認網頁 API 有回應；WebSocket 全關後重設上限。已用本機轉發模擬斷網驗證。細節見 `docs/test-results.md`。
+
 * **1.5.5 已發佈（build 31）— 開啟 App 時檢查更新＋左下角提示**：開啟後 3 秒背景檢查（設定可關）；用 Sparkle 溫和提醒（`supportsGentleScheduledUpdateReminders`、`standardUserDriverShouldHandleShowingScheduledUpdate` 回 false），發現新版時在側邊欄左下角顯示「有新版本 X」，點一下打開標準更新視窗。手動「檢查更新…」仍直接顯示標準視窗。
 
 * **1.5.4 已發佈（build 30）— 放大單一畫面預設用主串流；自動更新改回 Sparkle 標準介面**（`SPUStandardUpdaterController`，移除自訂 DVRUserDriver／UpdateWindow、開啟時強制檢查與更新後提示）：`useMainStreamWhenEnlarged` 預設開啟（未設定過者套用預設），未開進階功能也套用；開關仍在「進階功能」內（預設開）。進階功能仍可逐支攝影機指定主／子串流。

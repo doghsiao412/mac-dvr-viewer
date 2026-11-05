@@ -342,6 +342,11 @@ public actor DVRConnection {
         } catch {
             // 連線層級被拒（非 DVR 指令錯誤）→ 視為已達 WebSocket 上限
             if case NVMSError.device = error { throw error }
+            // 但網路中斷時 WebSocket 也會失敗：先確認 DVR 網頁 API 還有回應，
+            // 沒回應就是連不到 DVR，不要誤判成上限（否則會跳出設定提示，且上限被永久調低）
+            do { _ = try await onlineChannelIds() } catch {
+                throw NVMSError.transport(Self.unreachableMessage)
+            }
             webLiveCap = max(activeWebLive, 1)
             if let ch = channel(channelId), let ms = try? await openPrivateLiveIfAvailable(ch, mainStream: mainStream) {
                 return ms
@@ -353,6 +358,9 @@ public actor DVRConnection {
 
     /// 超過 WebSocket 上限且私有協定連不上時的錯誤訊息開頭（App 用來顯示設定提示）
     public static let liveLimitMessage = "DVR 同時影像連線已達上限"
+
+    /// 網路中斷或 DVR 沒有回應
+    public static let unreachableMessage = "無法連線到 DVR（網路中斷或 DVR 沒有回應），稍後自動重試"
 
     static func servicePortMismatchMessage(_ port: Int) -> String {
         "影像服務 Port \(port) 連到的是另一台設備（序號不符），請在設定中修正此 DVR 的影像服務 Port"
@@ -369,7 +377,11 @@ public actor DVRConnection {
     /// 私有協定連不上時，暫停嘗試到此時間（避免每格都等逾時）
     private var privateRetryAfter: Date?
 
-    private func webLiveClosed() { activeWebLive = max(activeWebLive - 1, 0) }
+    private func webLiveClosed() {
+        activeWebLive = max(activeWebLive - 1, 0)
+        // 全部關閉後重新偵測上限（避免一次誤判讓之後一直走私有協定）
+        if activeWebLive == 0 { webLiveCap = nil }
+    }
 
     private func openPrivateLiveIfAvailable(_ ch: DVRChannel, mainStream: Bool) async throws -> MediaStream {
         if let t = privateRetryAfter, t > Date() { throw NVMSError.transport(privateFailure ?? "私有協定暫時無法連線") }

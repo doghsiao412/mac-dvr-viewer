@@ -4,12 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.5.5</title>
-      <pubDate>Wed, 04 Nov 2026 08:31:24 GMT</pubDate>
-      <sparkle:version>31</sparkle:version>
-      <sparkle:shortVersionString>1.5.5</sparkle:shortVersionString>
+      <title>DVR Viewer 1.5.6</title>
+      <pubDate>Thu, 05 Nov 2026 06:12:05 GMT</pubDate>
+      <sparkle:version>32</sparkle:version>
+      <sparkle:shortVersionString>1.5.6</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.5.5
+      <description sparkle:format="markdown"><![CDATA[v1.5.6
+
+- 修正網路短暫中斷時，誤判為「DVR 同時影像連線已達上限」並跳出設定提示的問題；現在會顯示「無法連線到 DVR」，網路恢復後自動接回。
+- 修正上述誤判後，部分畫面持續改走備用連線的問題。
+
+v1.5.5
 
 - 開啟 App 時也會在背景檢查更新；發現新版本時，在側邊欄左下角顯示提示，點一下即可查看更新內容並安裝，不會直接跳出視窗打斷使用。可在設定關閉自動檢查。
 
@@ -190,11 +195,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5.5/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5.5/DVR-Viewer-1.5.5.dmg" sparkle:edSignature="7ZJ2e5WNkE12z6+Ks1lcBzwsd7Gsb7Ag/Stwl9mu5IpB/19v1euQ+dwIwNTDG+chQSiOHMgPUBkxlH7vgiIrBQ==" length="2988859" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5.6/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5.6/DVR-Viewer-1.5.6.dmg" sparkle:edSignature="N4C1LXRUCosX68Fmx093WApmmG7D82QnORAeuSjAAOyEI9xf+H9NaXYpk2Htf6lU0tQW/q/St2il4CVjfRfpBw==" length="2989594" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: l0itIxvgjUAsisLxtUoTg2sPb4deeRGgz/Lx2RYsMrcjgux8Yqm+wZraaS2VBp7M4w7WQuAiyq0TvmrFHpohDQ==
-length: 12231
+edSignature: ScadwHn8kkcWeK0ttusrsDhCRmy/l5zGi3hfL0oPkAi1yvgyKaMsPqVdzu495G1veZDypdovBR6K8HCGbfHgBA==
+length: 12503
 -->
