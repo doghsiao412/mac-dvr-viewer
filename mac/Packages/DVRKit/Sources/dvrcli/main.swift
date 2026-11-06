@@ -1,4 +1,5 @@
 import AVFoundation
+import CommonCrypto
 import CoreMedia
 import DVRKit
 import Foundation
@@ -325,7 +326,8 @@ final class Counter: @unchecked Sendable {
 }
 
 func runPlayerTest(host: String, port: Int, user: String, rest: [String], args: Args) async -> Int32 {
-    let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+    let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036),
+                             autoDetectServicePort: args.flags["service-port"] == nil) { try devPassword(user: user, host: host) }
     do {
         let chls = try await conn.connect()
         let info = await conn.info
@@ -1066,6 +1068,109 @@ func run() async -> Int32 {
             let use = Array(chls.filter { online.contains($0.id) }.prefix(Int(rest.first ?? "4") ?? 4))
             await runSoak(conn: conn, channels: use, hours: Double(args.flags["hours"] ?? "10") ?? 10, main: args.bool("main"))
         } catch { print("✖ \(error.localizedDescription)"); return 1 }
+        await conn.disconnect()
+        return 0
+    }
+    if cmd == "privkey" {
+        // privkey [頻道]：診斷加密關鍵幀。用登入回覆中候選位置的 16 bytes 當 AES-128 金鑰，
+        // 試解關鍵幀不同位置的 128 bytes，只印「解完是否出現起始碼」；不印金鑰、不存影像
+        let sp = args.int("service-port", 6036)
+        let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+        do {
+            let chls = try await conn.connect()
+            await conn.disconnect()
+            let n = max(1, min(Int(rest.first ?? "1") ?? 1, chls.count))
+            let c = TVTPrivateClient(host: host, port: sp)
+            try await c.connect(user: user, password: try devPassword(user: user, host: host))
+            let reply = await c.loginReply
+            print("■ 私有協定登入成功，加密登入：\(await c.usedEncryptedLogin)，登入回覆 \(reply.count) bytes")
+            let (task, frames) = try await c.openLive(channelGUID: chls[n - 1].id, chNo: chls[n - 1].index, streamType: 2)
+            func aes(_ key: Data, _ block: Data) -> Data? {
+                var out = Data(count: block.count); var moved = 0
+                let st = out.withUnsafeMutableBytes { o in block.withUnsafeBytes { b in key.withUnsafeBytes { k in
+                    CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionECBMode),
+                            k.baseAddress, 16, nil, b.baseAddress, block.count, o.baseAddress, block.count, &moved) } } }
+                return st == kCCSuccess ? out : nil
+            }
+            func startCode(_ d: Data) -> Int? {
+                var i = d.startIndex
+                while i + 4 <= d.endIndex { if d[i] == 0, d[i + 1] == 0, (d[i + 2] == 1 || (d[i + 2] == 0 && d[i + 3] == 1)) { return i - d.startIndex }; i += 1 }
+                return nil
+            }
+            var keys = 0
+            for try await f in frames {
+                guard f.count > 300, startCode(f.subdata(in: (f.startIndex + 64)..<(f.startIndex + 200))) == nil else { continue }
+                keys += 1
+                print("■ 加密關鍵幀 \(keys)：\(f.count) bytes，SHFL 標頭 @0x28–0x3F：" + f[(f.startIndex + 0x28)..<(f.startIndex + 0x40)].map { String(format: "%02x", $0) }.joined(separator: " "))
+                var hits: [String] = []
+                // 候選金鑰：登入回覆每個位置的 16 bytes，加上由密碼推導的幾種
+                var cands: [(String, Data)] = []
+                for ko in 0...max(0, reply.count - 16) { cands.append(("回覆@\(ko)", reply.subdata(in: (reply.startIndex + ko)..<(reply.startIndex + ko + 16)))) }
+                let pw = (try? devPassword(user: user, host: host)) ?? ""
+                func md5(_ d: Data) -> Data { var o = [UInt8](repeating: 0, count: 16); d.withUnsafeBytes { _ = CC_MD5($0.baseAddress, CC_LONG(d.count), &o) }; return Data(o) }
+                func sha1(_ d: Data) -> Data { var o = [UInt8](repeating: 0, count: 20); d.withUnsafeBytes { _ = CC_SHA1($0.baseAddress, CC_LONG(d.count), &o) }; return Data(o) }
+                let m = md5(Data(pw.utf8)); let mhex = m.map { String(format: "%02X", $0) }.joined()
+                cands.append(("MD5(密碼)", m))
+                cands.append(("MD5大寫hex前16", Data(mhex.utf8.prefix(16))))
+                cands.append(("SHA1(MD5大寫+00000000)前16", sha1(Data((mhex + "00000000").utf8)).prefix(16)))
+                cands.append(("MD5(MD5大寫+00000000)", md5(Data((mhex + "00000000").utf8))))
+                for ko in 0...max(0, reply.count - 16) {
+                    cands.append(("回覆@\(ko) XOR MD5", Data(zip(reply.subdata(in: (reply.startIndex + ko)..<(reply.startIndex + ko + 16)), m).map { $0 ^ $1 })))
+                }
+                for (name, key) in cands {
+                    for po in 0...min(400, f.count - 128) {
+                        if let dec = aes(key, f.subdata(in: (f.startIndex + po)..<(f.startIndex + po + 128))), let sc = startCode(dec), sc < 8 {
+                            hits.append("金鑰 \(name)、資料位置 \(po) → 起始碼在 \(sc)，NAL 類型 \(String(format: "0x%02x", dec[dec.startIndex + sc + (dec[dec.startIndex + sc + 2] == 1 ? 3 : 4)]))")
+                        }
+                    }
+                }
+                print(hits.isEmpty ? "   沒有任何組合解出起始碼" : hits.map { "   ✅ " + $0 }.joined(separator: "\n"))
+                if keys >= 2 { break }
+            }
+            await c.closeLive(channelGUID: chls[n - 1].id, chNo: chls[n - 1].index, task: task)
+            await c.disconnect()
+        } catch { print("✖ \(error)"); return 1 }
+        return 0
+    }
+    if cmd == "privdump" {
+        // privdump [頻道] [--seconds 5]：私有協定即時串流，只列訊框結構（標頭 hex、起始碼位置、解碼結果），不存影像
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036), autoDetectServicePort: args.flags["service-port"] == nil) { try devPassword(user: user, host: host) }
+        do {
+            let chls = try await conn.connect()
+            print("■ 已登入網頁 API，頻道 \(chls.count)，影像走 \(await conn.usesPrivateProtocol ? "私有協定" : "WebSocket")，影像服務 Port \(await conn.servicePort)")
+            let n = max(1, min(Int(rest.first ?? "1") ?? 1, chls.count))
+            let ms = try await conn.openLive(channelId: chls[n - 1].id, mainStream: false)
+            print("■ 已開啟頻道 \(n) 即時串流（\(ms.transport)）")
+            let decoder = VideoDecoder()
+            var count = 0, bytes = 0, decoded = 0, shown = 0
+            var base: UInt64?
+            var summary = DecodeSummary()
+            let t0 = Date()
+            let secs = Double(args.int("seconds", 5))
+            do {
+                for try await f in ms.frames {
+                    count += 1; bytes += f.count
+                    if shown < 6 {
+                        shown += 1
+                        let hex = f.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " ")
+                        var sc = [Int]()
+                        var i = f.startIndex
+                        while i + 4 <= f.endIndex, sc.count < 4 {
+                            if f[i] == 0, f[i + 1] == 0, f[i + 2] == 0, f[i + 3] == 1 { sc.append(i - f.startIndex) }
+                            i += 1
+                        }
+                        print("   訊框 \(count)：\(f.count) bytes，起始碼位置 \(sc)\n     前 64 bytes：\(hex)")
+                    }
+                    let before = summary.decoded
+                    decodeOne(f, decoder: decoder, base: &base, summary: &summary, saveTo: nil)
+                    if summary.decoded > before { decoded += 1 }
+                    if Date().timeIntervalSince(t0) > secs { break }
+                }
+            } catch { print("   串流錯誤：\(error)") }
+            print("■ \(Int(secs)) 秒：收到 \(count) 個訊框、\(bytes) bytes，解碼成功 \(decoded)")
+            printSummary(summary, decoder: decoder)
+            await ms.close()
+        } catch { print("✖ \(error)"); return 1 }
         await conn.disconnect()
         return 0
     }

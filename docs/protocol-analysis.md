@@ -303,3 +303,4 @@ CMD_HTTP_REQUEST (0x1010D00)：在私有通道內傳送 HTTP 式 XML 設定請�
 * `NVMSClient.login()` 依 reqLogin 是否成功自動選擇。
 
 * 私有協定（SERVICE Port）登入：連線後 DVR 先送 64 bytes `head`。@0x2C 非 0 時要加密登入（原廠 SDK `CNVRNetDevice_N9000::Login`）：密碼欄 20 bytes = SHA1(MD5 大寫 hex(密碼) + `%08d`(亂數))，亂數 = @0x2D | @0x2E<<8 | @0x2F<<16；@0x2C 含 0x02 時帳號欄非 0 位元組與 `%u`(亂數) 字串循環 XOR；payload @204 放 rand()%10000000。@0x2C 為 0 時沿用明文。
+* 加密韌體（head @0x2C 非 0）的私有協定回覆類型低位元組為 0x0A（一般為 0x06）。關鍵幀（SHFL @7 = 1）的影像資料（SHFL 標頭 68 + 延伸區長度 @45 之後）開頭 128 bytes 以 AES-128-ECB 加密，金鑰 = 登入回覆 payload @68 的 16 bytes。

@@ -1,3 +1,4 @@
+import CommonCrypto
 import CryptoKit
 import Foundation
 import Network
@@ -62,6 +63,8 @@ public actor TVTPrivateClient {
     private var greeting: Data?
     /// 這次登入是否用了加密（診斷用）
     public private(set) var usedEncryptedLogin = false
+    /// 加密韌體的關鍵幀金鑰（登入回覆 @68 的 16 bytes；原廠 SDK 存在 0xa18）
+    private var frameKey: Data?
 
     public init(host: String, port: Int) {
         self.host = host
@@ -93,6 +96,8 @@ public actor TVTPrivateClient {
             throw ClientError.loginFailed(code)
         }
         loginReply = reply.data
+        frameKey = usedEncryptedLogin && reply.data.count >= 84
+            ? reply.data.subdata(in: (reply.data.startIndex + 68)..<(reply.data.startIndex + 84)) : nil
         deviceGUID = reply.data.subdata(in: reply.data.startIndex..<(reply.data.startIndex + 16))
         sessionGUID = reply.data.subdata(in: (reply.data.startIndex + 84)..<(reply.data.startIndex + 100))
         isConnected = true
@@ -102,6 +107,34 @@ public actor TVTPrivateClient {
                 await self?.sendHeartbeat()
             }
         }
+    }
+
+    // MARK: - 關鍵幀解密（原廠 SDK ECMSToDevFrame／CDataEncryption::DecryptDataWithKey）
+
+    /// 加密韌體的關鍵幀：影像資料（SHFL 標頭 68 + 延伸區之後）開頭 128 bytes 以 AES-128-ECB 加密。
+    /// 解開後必須以起始碼開頭才採用，否則原樣傳回（未加密的訊框不受影響）。
+    static func decryptKeyframe(_ d: Data, key: Data) -> Data {
+        let b = d.startIndex
+        guard d.count >= SHFLFrame.headerSize, d.prefix(4) == SHFLFrame.magic, d[b + 7] == 1 else { return d }
+        let start = SHFLFrame.headerSize + Int(d[b + 45])
+        guard d.count >= start + 128, !hasStartCode(d, at: start) else { return d }
+        let block = d.subdata(in: (b + start)..<(b + start + 128))
+        var out = Data(count: 128)
+        var moved = 0
+        let st = out.withUnsafeMutableBytes { o in block.withUnsafeBytes { i in key.withUnsafeBytes { k in
+            CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionECBMode),
+                    k.baseAddress, kCCKeySizeAES128, nil, i.baseAddress, 128, o.baseAddress, 128, &moved)
+        } } }
+        guard st == kCCSuccess, hasStartCode(out, at: 0) else { return d }
+        var r = d
+        r.replaceSubrange((b + start)..<(b + start + 128), with: out)
+        return r
+    }
+
+    private static func hasStartCode(_ d: Data, at o: Int) -> Bool {
+        let i = d.startIndex + o
+        guard d.count >= o + 4 else { return false }
+        return d[i] == 0 && d[i + 1] == 0 && (d[i + 2] == 1 || (d[i + 2] == 0 && d[i + 3] == 1))
     }
 
     // MARK: - 登入封包（原廠 SDK CNVRNetDevice_N9000::Login）
@@ -416,12 +449,13 @@ public actor TVTPrivateClient {
         case 0x0000_0006 where sub == 0x0001_0001:
             guard data.count >= 12 else { return }
             let ch = data.u32le(at: 8)
-            liveSinks[ch]?.cont.yield(data)
+            liveSinks[ch]?.cont.yield(frameKey.map { Self.decryptKeyframe(data, key: $0) } ?? data)
         case 0x0002_0006:
             guard data.count >= 72 else { return }
             let task = data.subdata(in: (data.startIndex + 52)..<(data.startIndex + 68))
             if sub & 0xFFFF == 0x0001 {
-                taskSinks[task]?.yield(data.subdata(in: (data.startIndex + 72)..<data.endIndex))
+                let frame = data.subdata(in: (data.startIndex + 72)..<data.endIndex)
+                taskSinks[task]?.yield(frameKey.map { Self.decryptKeyframe(frame, key: $0) } ?? frame)
             } else if sub & 0xFFFF == 0x0002 {
                 taskSinks.removeValue(forKey: task)?.finish()  // 回放結束
             }
