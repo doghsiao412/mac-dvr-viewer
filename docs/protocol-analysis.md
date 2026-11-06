@@ -294,3 +294,10 @@ CMD_HTTP_REQUEST (0x1010D00)：在私有通道內傳送 HTTP 式 XML 設定請�
 * 同一條 WebSocket 第二個 `/device/preview/open` 回 536871004（網頁前端也是每個畫面一條 WebSocket）。
 * 同一台 DVR 的私有協定（SERVICE Port，外部轉發 6033）在同一條 TCP 上可同時開 16 路即時影像。
 * App 做法：`DVRConnection.openLive` 先用 WebSocket；建立失敗（非 DVR 指令錯誤）時記下上限，之後超過上限的畫面改用私有協定；私有協定連不上時 60 秒內不再嘗試。
+
+
+## 登入方式補充（2026-11-06）
+
+* 部分韌體（實例：1.4.4…B200923，網頁資源 20200602.01）：`POST /reqLogin`（body 含 `<token>null</token>`）回 `sessionId`／`nonce`／`token`（都帶大括號）。`doLogin` 帶 Cookie `sessionId=<去括號>` 與 `<token>`，密碼 = SHA1 大寫 hex(MD5 大寫 hex(明文) + nonce 原樣含括號)；回應不一定有 sessionId，沿用 reqLogin 的。之後所有請求的 XML 都要帶 `<token>`。失敗回應有 `ramainingNumber`、`locked`。
+* 其他韌體（8083、8082 兩台）：`reqLogin` 回 fail 536870934，`doLogin` 用 Base64 明文密碼。
+* `NVMSClient.login()` 依 reqLogin 是否成功自動選擇。

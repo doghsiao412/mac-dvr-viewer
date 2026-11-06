@@ -39,6 +39,8 @@ setvbuf(stdout, nil, _IOLBF, 0)
 nonisolated(unsafe) var devPort: Int?
 
 func devPassword(user: String, host: String) throws -> String {
+    // 只供本機假 DVR 測試：DVRCLI_FAKE_PASSWORD 有設定時直接使用（不讀 Keychain）
+    if let fake = ProcessInfo.processInfo.environment["DVRCLI_FAKE_PASSWORD"], host == "127.0.0.1" { return fake }
     // 依序嘗試 "user@host" 與 "user@host:port"
     // DVRCLI_KEYCHAIN_HOST：經本機轉發測試（host 為 127.0.0.1）時，仍用原本 DVR 的 Keychain 項目
     let keyHost = ProcessInfo.processInfo.environment["DVRCLI_KEYCHAIN_HOST"] ?? host

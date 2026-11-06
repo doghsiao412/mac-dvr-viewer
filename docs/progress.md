@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.5.7 測試版 2（build 34，`v1.5.7-beta2`）— 舊韌體 nonce 登入**：`NVMSClient.login()` 先試 `reqLogin`，有 nonce 就送 SHA1(MD5大寫+nonce) 大寫雜湊並在之後每個請求帶 `<token>`；不支援就沿用 Base64。現有兩台實體回歸通過；使用者區網那台待確認。
+
 * **1.5.7 測試版（build 33，GitHub 預先發行 `v1.5.7-beta1`、分支 `beta/lan-discovery`，未更新 appcast）— 區網搜尋 DVR**：新增 DVR 視窗加「搜尋區網中的 DVR」，用 TVT 原廠搜尋（234.55.55.55／.56:23456）＋ONVIF WS-Discovery，點結果帶入 IP、網頁 Port、影像服務 Port。`DVRKit/LANDiscovery.swift`、`dvrcli discover`。Mock 與本機假 DVR 驗證通過；**實體 DVR 未驗證**（Port 位元組順序待確認）。正式版請用 build ≥ 34。iPhone 無多播權限，不做。
 
 * **未發佈 — 整晚穩定性測試與斷網誤判修正（2026-11-05）**：新增 `dvrcli soak`（長時間穩定性測試，只記數字）。兩台 DVR 各 4 路跑 14 小時：記憶體無增長、兩次網路中斷都自動接回。修正網路中斷被誤判為「同時影像連線已達上限」（會跳設定提示、上限被永久調低）：`DVRConnection.openLive` 判定上限前先確認網頁 API 有回應；WebSocket 全關後重設上限。已用本機轉發模擬斷網驗證。細節見 `docs/test-results.md`。

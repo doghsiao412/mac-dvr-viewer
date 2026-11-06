@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// NVMS-9000 平台的 HTTP XML API 用戶端（DVR 網頁介面使用的同一套 API）。
@@ -5,13 +6,18 @@ import Foundation
 /// 協定來源：DVR 網頁前端 `js/lib/Communication.js`、`js/app/login.js`（已於實體 DVR 讀取）。
 /// - 每個指令都是 `POST /<指令名>`，Body 為 XML：
 ///   `<request version="1.0" systemType="NVMS-9000" clientType="WEB">…</request>`
-/// - `doLogin` 的 `<password>` 是 Base64(明文密碼)；成功後回傳 `sessionId`
+/// - 登入有兩種（依 DVR 是否支援 `reqLogin` 自動選擇）：
+///   - 部分韌體（例如網頁資源 2020 年版）：先 `POST /reqLogin` 取 `nonce`／`token`／`sessionId`，
+///     `doLogin` 的密碼為 SHA1 大寫 hex（MD5 大寫 hex(明文密碼) + nonce），之後每個請求的 XML 都帶 `<token>`
+///   - 其他（`reqLogin` 回失敗）：`doLogin` 的 `<password>` 是 Base64(明文密碼)；成功後回傳 `sessionId`
 /// - 之後的請求以 Cookie `sessionId=<id>` 維持 Session
 public actor NVMSClient {
     public nonisolated let host: String
     public nonisolated let port: Int
     public private(set) var sessionId: String?
     public private(set) var loginInfo: LoginInfo?
+    /// reqLogin 取得的 token（有的韌體每個請求都要帶）
+    public private(set) var token: String?
 
     private let session: URLSession
 
@@ -46,6 +52,27 @@ public actor NVMSClient {
         xmlHeader + #"<request version="1.0" systemType="NVMS-9000" clientType="WEB">"# + inner + "</request>"
     }
 
+    /// 在 `<request …>` 開頭插入 `<token>`（自閉合的空請求會展開）
+    static func withToken(_ body: String, _ token: String) -> String {
+        guard !body.contains("<token>") else { return body }
+        let t = "<token>\(token)</token>"
+        if let r = body.range(of: #"<request [^>]*?/>"#, options: .regularExpression) {
+            let open = String(body[r].dropLast(2)) + ">"
+            return body.replacingCharacters(in: r, with: open + t + "</request>")
+        }
+        if let r = body.range(of: #"<request [^>]*>"#, options: .regularExpression) {
+            return body.replacingCharacters(in: r, with: String(body[r]) + t)
+        }
+        return body
+    }
+
+    /// nonce 登入的密碼：SHA1 大寫 hex（MD5 大寫 hex(明文密碼) + nonce）（DVR 網頁 login.js、spark-md5.js、sha1.js）
+    static func hashedPassword(_ password: String, nonce: String) -> String {
+        func hex(_ d: some Sequence<UInt8>) -> String { d.map { String(format: "%02X", $0) }.joined() }
+        let md5 = hex(Insecure.MD5.hash(data: Data(password.utf8)))
+        return hex(Insecure.SHA1.hash(data: Data((md5 + nonce).utf8)))
+    }
+
     static func cdata(_ s: String) -> String {
         "<![CDATA[" + s.replacingOccurrences(of: "]]>", with: "]]]]><![CDATA[>") + "]]>"
     }
@@ -55,19 +82,7 @@ public actor NVMSClient {
     /// 傳送指令並回傳 `<response>` 根節點。`status != success` 時丟出 `NVMSError.device`。
     @discardableResult
     public func call(_ command: String, body: String? = nil) async throws -> DVRXMLElement {
-        var req = URLRequest(url: baseURL.appending(path: command))
-        req.httpMethod = "POST"
-        req.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
-        req.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
-        if let sid = sessionId {
-            req.setValue("sessionId=\(sid)", forHTTPHeaderField: "Cookie")
-        }
-        req.httpBody = Data((body ?? Self.emptyRequest()).utf8)
-
-        let (data, resp) = try await session.data(for: req)
-        guard let http = resp as? HTTPURLResponse else { throw NVMSError.transport("非 HTTP 回應") }
-        guard http.statusCode == 200 else { throw NVMSError.http(http.statusCode) }
-        let root = try DVRXMLElement.parse(data)
+        let root = try await post(command, body: body)
         let status = root.text("status")
         if status != "success" {
             let code = Int(root.text("errorCode") ?? "") ?? -1
@@ -76,20 +91,54 @@ public actor NVMSClient {
         return root
     }
 
+    /// 傳送指令並回傳 `<response>`（不檢查 status）
+    private func post(_ command: String, body: String?) async throws -> DVRXMLElement {
+        var req = URLRequest(url: baseURL.appending(path: command))
+        req.httpMethod = "POST"
+        req.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+        req.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
+        if let sid = sessionId {
+            req.setValue("sessionId=\(sid)", forHTTPHeaderField: "Cookie")
+        }
+        var xml = body ?? Self.emptyRequest()
+        if let token { xml = Self.withToken(xml, token) }
+        req.httpBody = Data(xml.utf8)
+
+        let (data, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw NVMSError.transport("非 HTTP 回應") }
+        guard http.statusCode == 200 else { throw NVMSError.http(http.statusCode) }
+        return try DVRXMLElement.parse(data)
+    }
+
     // MARK: - Session
 
     public func login(user: String, password: String) async throws -> LoginInfo {
-        let pw64 = Data(password.utf8).base64EncodedString()
+        sessionId = nil
+        token = nil
+        // 1. 支援 reqLogin 的韌體：取 nonce／token／sessionId，密碼送雜湊；不支援（回失敗）就用 Base64
+        var pw = Data(password.utf8).base64EncodedString()
+        if let r = try? await call("reqLogin", body: Self.request("<token>null</token>")),
+           let nonce = r.text("content/nonce"), !nonce.isEmpty,
+           let tk = r.text("content/token"), !tk.isEmpty {
+            token = tk
+            sessionId = r.text("content/sessionId").map(Self.stripBraces)
+            pw = Self.hashedPassword(password, nonce: nonce)
+        }
+        // 2. doLogin（只送一次，不換格式重試，避免帳號被鎖）
         let body = Self.request(
-            "<content><userName>\(Self.cdata(user))</userName><password>\(Self.cdata(pw64))</password></content>")
-        let root = try await call("doLogin", body: body)
-        guard var sid = root.text("content/sessionId"), !sid.isEmpty else {
-            throw NVMSError.badXML("doLogin 回應沒有 sessionId")
+            "<content><userName>\(Self.cdata(user))</userName><password>\(Self.cdata(pw))</password></content>")
+        let root = try await post("doLogin", body: body)
+        guard root.text("status") == "success" else {
+            let code = Int(root.text("errorCode") ?? "") ?? -1
+            sessionId = nil
+            token = nil
+            throw NVMSError.loginFailed(code: code,
+                                        remaining: (root.text("ramainingNumber") ?? root.text("content/ramainingNumber")).flatMap { Int($0) },
+                                        locked: (root.text("locked") ?? root.text("content/locked")) == "true")
         }
-        if let a = sid.firstIndex(of: "{"), let b = sid.lastIndex(of: "}"), a < b {
-            sid = String(sid[sid.index(after: a)..<b])
-        }
-        sessionId = sid
+        // 3. sessionId：doLogin 回應有就用，沒有就沿用 reqLogin 的
+        if let s = root.text("content/sessionId"), !s.isEmpty { sessionId = Self.stripBraces(s) }
+        guard sessionId != nil else { throw NVMSError.badXML("doLogin 回應沒有 sessionId") }
         let info = LoginInfo(
             userId: root.text("content/userId") ?? "",
             authGroupId: root.text("content/authGroupId") ?? "",
@@ -102,6 +151,12 @@ public actor NVMSClient {
         guard sessionId != nil else { return }
         _ = try? await call("doLogout")
         sessionId = nil
+        token = nil
+    }
+
+    static func stripBraces(_ s: String) -> String {
+        if let a = s.firstIndex(of: "{"), let b = s.lastIndex(of: "}"), a < b { return String(s[s.index(after: a)..<b]) }
+        return s
     }
 
     // MARK: - 查詢
@@ -248,6 +303,8 @@ public enum NVMSError: Error, CustomStringConvertible {
     case http(Int)
     case badXML(String)
     case device(command: String, code: Int)
+    /// 登入被拒（remaining：DVR 回報的剩餘嘗試次數）
+    case loginFailed(code: Int, remaining: Int?, locked: Bool)
 
     public var description: String {
         switch self {
@@ -255,6 +312,11 @@ public enum NVMSError: Error, CustomStringConvertible {
         case .http(let c): return "HTTP 狀態碼 \(c)"
         case .badXML(let s): return "XML 解析失敗：\(s)"
         case .device(let cmd, let code): return "\(cmd) 失敗：\(NVMSError.describe(code))（\(code)）"
+        case .loginFailed(let code, let remaining, let locked):
+            var m = "登入失敗：\(NVMSError.describe(code))（\(code)）"
+            if locked { m += "；帳號已被 DVR 暫時鎖定，請稍後再試" }
+            else if let remaining { m += "；DVR 剩餘嘗試次數 \(remaining)" }
+            return m
         }
     }
 

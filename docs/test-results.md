@@ -448,3 +448,17 @@ Debug 版新增版面自動測試：`DVRVIEWER_UITEST=<資料夾> [DVRVIEWER_UIT
 | — | 實體 TVT DVR 回覆（尤其 Port 欄位的位元組順序） | ⏳ 待使用者在 DVR 所在區網用測試版確認 |
 
 * iPhone 版不做：iOS 發送多播需 Apple 核准的 `com.apple.developer.networking.multicast` 權限，免費 Personal Team 無法取得。
+
+### 舊韌體 nonce 登入（2026-11-06，1.5.7 測試版 2 build 34）
+
+使用者回報區網內一台 DVR（網頁 Port 8084，韌體 1.4.4…B200923，網頁資源 20200602.01，無 websocket.cmd.js）帳密正確但 App 登入失敗。由使用者在該區網的 Claude Code 讀網頁 login.js 診斷：這台要先 `reqLogin` 取 nonce／token／sessionId，密碼送 `SHA1大寫(MD5大寫(密碼)+nonce)`，之後每個請求 XML 帶 `<token>`。
+
+| 日期 | 測試 | 結果 |
+|---|---|---|
+| 2026-11-06 | 現有兩台 DVR 不帶密碼 `POST /reqLogin` | 都回 fail 536870934 → 沿用 Base64 登入（行為不變） |
+| 2026-11-06 | 單元測試：網頁演算法測試向量、token 插入、錯誤訊息 | ✅ Mock，35 項全過 |
+| 2026-11-06 | 本機假 DVR（Python）＋ dvrcli：reqLogin→doLogin 順序、Cookie、token、雜湊；錯誤密碼顯示剩餘次數 | ✅ Mock |
+| 2026-11-06 | 實體回歸：8083（WebSocket）、8082（私有協定）登入、即時子／主串流 | ✅ 實體 |
+| — | 使用者區網那台 DVR 實際登入、影像（舊韌體影像走私有協定，其登入方式未確認） | ⏳ 待使用者用測試版 2 確認 |
+
+* 登入失敗只送一次、不換格式重試（DVR 預設 5 次就鎖帳號）；失敗訊息帶 DVR 回報的剩餘次數。
