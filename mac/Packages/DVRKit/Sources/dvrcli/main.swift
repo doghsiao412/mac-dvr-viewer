@@ -24,6 +24,7 @@ extension Data {
 //   swift run dvrcli <host> <port> <user> chcheck <yyyy-MM-dd>     # 逐頻道驗證回放頻道正確
 //   swift run dvrcli <host> <port> <user> export <頻道> "<yyyy-MM-dd HH:mm:ss>" <秒數> [--main]   # 下載錄影成 MP4
 //   swift run dvrcli <host> <port> <user> soak [N] [--hours 10] [--main]   # 長時間穩定性測試（只記數字）
+//   swift run dvrcli discover [--seconds 3]                 # 區網搜尋 DVR（TVT＋ONVIF 詢問封包，不掃描 IP）
 //   swift run dvrcli decode <captures/*.bin>              # 離線解碼，不連 DVR
 //   swift run dvrcli <host> <port> <user> raw <指令> [xml-inner]
 //
@@ -1018,6 +1019,18 @@ func dayRange(_ day: String) -> (String, String, Date)? {
 @MainActor
 func run() async -> Int32 {
     let args = Args(Array(CommandLine.arguments.dropFirst()))
+    if args.positional.first == "discover" {
+        // dvrcli discover [--seconds 3]：區網搜尋（TVT 原廠搜尋＋ONVIF），只送詢問封包、不逐一掃描 IP
+        let secs = Double(args.flags["seconds"] ?? "3") ?? 3
+        print("■ 區網搜尋 \(secs) 秒（介面 \(UDPMulticastInfo.interfaceCount) 個）…")
+        let found = await LANDiscovery.search(timeout: secs)
+        print("■ 找到 \(found.count) 台")
+        for d in found {
+            let src = d.sources.map(\.rawValue).sorted().joined(separator: "+")
+            print("   \(d.ip)  網頁 Port \(d.httpPort.map(String.init) ?? "-")  影像服務 Port \(d.servicePort.map(String.init) ?? "-")  \(d.kind ?? "-")  \(d.model ?? "-")  \(d.name ?? "")  [\(src)]")
+        }
+        return 0
+    }
     if args.positional.first == "decode" {
         guard args.positional.count >= 2 else { print("用法：dvrcli decode <captures/*.bin>"); return 1 }
         return runOfflineDecode(args.positional[1])

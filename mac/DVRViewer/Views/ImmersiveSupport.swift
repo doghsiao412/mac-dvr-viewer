@@ -60,7 +60,7 @@ enum UITestHarness {
     static let outputDir = ProcessInfo.processInfo.environment["DVRVIEWER_UITEST"]
     static var enabled: Bool { outputDir != nil }
     static var gridFrame: CGRect = .zero
-    /// DVRVIEWER_UITEST_SCENE=transcript：回放頁並開啟逐字稿面板（只截圖，不進全螢幕）
+    /// DVRVIEWER_UITEST_SCENE=transcript：回放頁並開啟逐字稿面板（只截圖，不進全螢幕）；discover：新增 DVR 視窗自動搜尋區網
     static let scene = ProcessInfo.processInfo.environment["DVRVIEWER_UITEST_SCENE"]
     private static var started = false
 
@@ -102,6 +102,19 @@ enum UITestHarness {
                 // 等開啟時的更新檢查完成，截取左下角提示
                 try? await Task.sleep(for: .seconds(12))
                 snap("update")
+                try? log.write(to: URL(fileURLWithPath: dir).appending(path: "layout.txt"), atomically: true, encoding: .utf8)
+                NSApp.terminate(nil)
+                return
+            }
+            if scene == "discover" {
+                // 新增 DVR 視窗自動按「搜尋區網」，截取工作表視窗
+                try? await Task.sleep(for: .seconds(7))
+                if let sheet = window.attachedSheet, let v = sheet.contentView?.superview ?? sheet.contentView,
+                   let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+                    v.cacheDisplay(in: v.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: dir).appending(path: "discover.png"))
+                    log += "== discover 工作表 \(Int(sheet.frame.width))x\(Int(sheet.frame.height))\n"
+                } else { log += "== discover：找不到工作表\n" }
                 try? log.write(to: URL(fileURLWithPath: dir).appending(path: "layout.txt"), atomically: true, encoding: .utf8)
                 NSApp.terminate(nil)
                 return

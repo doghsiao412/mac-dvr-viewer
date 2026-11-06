@@ -432,3 +432,19 @@ Debug 版新增版面自動測試：`DVRVIEWER_UITEST=<資料夾> [DVRVIEWER_UIT
 * ✅ 修正：判定上限前先確認 DVR 網頁 API 有回應，沒回應改報「無法連線到 DVR（網路中斷或 DVR 沒有回應），稍後自動重試」；WebSocket 全部關閉後重新偵測上限。
 * ✅ 修正驗證（2026-11-05）：經本機轉發模擬斷網 2 分鐘（轉發器停止傳送、連線保持沉默），4 路顯示新的錯誤訊息、不再出現「已達上限」，恢復後約 1 分鐘內 4 路全部回到正常幀數。DVRKit 24 項測試通過、Mac 編譯成功。
 * 未涵蓋：Session 逾時重登（每 30 秒保活讓 Session 一直有效，整晚未觸發）；App 畫面本身（測試走 dvrcli，未開 App 視窗）。
+
+### 區網搜尋 DVR（2026-11-06，1.5.7 測試版 build 33）
+
+兩種搜尋都只送「詢問」封包讓設備自己回報，不逐一掃描 IP：
+* TVT 原廠搜尋：格式取自 2BAD/tvt 附的原廠 Linux SDK（`NET_SDK_DiscoverDevice`，只用 objdump／strings 讀取、未執行）。請求 0x8C bytes（`MHED`、版本 0x00010008、類型 1）多播到 234.55.55.55:23456；設備回覆（類型 2）到 234.55.55.56:23456，欄位：MAC @0x20、伺服器 Port @0x26、IP @0x28、網頁 Port @0x3C、設備類型 @0x40、型號 @0xC4＋@0xB4。
+* ONVIF WS-Discovery：Probe 多播到 239.255.255.250:3702；只保留 ONVIF 影像設備（NAS、Windows 的 WSD 回覆會排除）。
+
+| 日期 | 測試 | 結果 |
+|---|---|---|
+| 2026-11-06 | DVRKit 單元測試（請求格式、回覆解析、排除自己的請求與 NAS 的 WSD、合併排序） | ✅ Mock，31 項全過 |
+| 2026-11-06 | 本機假 DVR（Python，回 TVT 與 ONVIF）＋ `dvrcli discover` 實際收發 | ✅ Mock，兩種都收到並正確解析 |
+| 2026-11-06 | 家中區網實際 ONVIF 回覆 | ✅ NAS／電腦的 WSD 回覆已排除（家中沒有攝影機，無實體結果） |
+| 2026-11-06 | 新增 DVR 視窗自動搜尋截圖（假 DVR） | ✅ 列出結果、TVT 排前面 |
+| — | 實體 TVT DVR 回覆（尤其 Port 欄位的位元組順序） | ⏳ 待使用者在 DVR 所在區網用測試版確認 |
+
+* iPhone 版不做：iOS 發送多播需 Apple 核准的 `com.apple.developer.networking.multicast` 權限，免費 Personal Team 無法取得。

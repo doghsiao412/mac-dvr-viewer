@@ -159,6 +159,9 @@ struct ContentView: View {
         } message: { dev in
             Text("「\(dev.config.name)」同時只能透過網頁連線顯示約 6 個畫面。要同時看更多畫面，請在設備設定填入正確的「影像服務 Port」（DVR 預設 6036；若路由器有轉發成其他 Port，請填外部 Port）。")
         }
+        #if DEBUG
+        .onAppear { if UITestHarness.scene == "discover" { editor = .new } }
+        #endif
         .sheet(item: $editor) { target in
             DeviceEditorView(target: target)
         }

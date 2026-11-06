@@ -16,12 +16,40 @@ struct DeviceEditorView: View {
     @State private var testing = false
     @State private var result: String?
     @State private var resultOK = false
+    @State private var searching = false
+    @State private var found: [DiscoveredDevice]?
 
     private var isNew: Bool { if case .new = target { return true } else { return false } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Form {
+                Section {
+                    HStack {
+                        Button {
+                            Task { await searchLAN() }
+                        } label: {
+                            Label(searching ? "搜尋中…" : "搜尋區網中的 DVR", systemImage: "dot.radiowaves.left.and.right")
+                        }
+                        .disabled(searching)
+                        if searching { ProgressView().controlSize(.small) }
+                    }
+                    if let found {
+                        if found.isEmpty {
+                            Text("沒有找到設備。Mac 要和 DVR 在同一個區網；也可能是 DVR 關閉了搜尋或路由器擋掉。可以直接在下方手動輸入。")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                        ForEach(found) { d in
+                            Button { pick(d) } label: { FoundDeviceRow(device: d, selected: host == d.ip) }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                } header: {
+                    Text("區網搜尋")
+                } footer: {
+                    Text("只在 Mac 和 DVR 在同一個區網時有用；從外網連線請手動輸入。點一下找到的設備即可帶入 IP 與 Port。")
+                        .foregroundStyle(.secondary)
+                }
                 Section {
                     TextField("名稱", text: $name, prompt: Text("例如：公司 DVR"))
                     TextField("IP 或主機名稱", text: $host, prompt: Text("192.168.1.100 或 mydvr.ddns.net"))
@@ -66,6 +94,23 @@ struct DeviceEditorView: View {
         }
         .frame(width: 460)
         .onAppear(perform: load)
+        #if DEBUG
+        .task { if UITestHarness.scene == "discover" { await searchLAN() } }
+        #endif
+    }
+
+    private func searchLAN() async {
+        searching = true
+        defer { searching = false }
+        found = await LANDiscovery.search(timeout: 3)
+    }
+
+    private func pick(_ d: DiscoveredDevice) {
+        host = d.ip
+        if let p = d.httpPort { port = String(p) }
+        if let sp = d.servicePort { servicePort = String(sp) }
+        if name.isEmpty { name = d.name ?? d.model ?? "" }
+        result = nil
     }
 
     private func load() {
@@ -124,5 +169,38 @@ struct DeviceEditorView: View {
             resultOK = false
             result = "連線失敗：\(DeviceModel.describe(error))"
         }
+    }
+}
+
+/// 搜尋結果的一列
+private struct FoundDeviceRow: View {
+    let device: DiscoveredDevice
+    let selected: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: device.isTVT ? "server.rack" : "video")
+                .foregroundStyle(device.isTVT ? Color.accentColor : .secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout.weight(.medium))
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            if selected { Image(systemName: "checkmark").foregroundStyle(.tint) }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var title: String {
+        [device.name, device.model].compactMap { $0 }.first ?? (device.isTVT ? "TVT 設備" : "ONVIF 設備")
+    }
+
+    private var detail: String {
+        var parts = [device.ip]
+        if let p = device.httpPort { parts.append("Port \(p)") }
+        if let k = device.kind { parts.append(k) }
+        if !device.isTVT { parts.append("可能不是 TVT 設備") }
+        return parts.joined(separator: "・")
     }
 }
