@@ -497,3 +497,14 @@ Debug 版新增版面自動測試：`DVRVIEWER_UITEST=<資料夾> [DVRVIEWER_UIT
 | — | App 介面實際畫面 | ⏳ 待使用者用測試版 6 確認 |
 
 * 小問題（未修）：這台子串流訊框時間戳看起來不是實際時間（主串流正常），畫面上的時間顯示可能不準。
+
+### 雲台控制（2026-11-06，1.5.7 測試版 7 build 39）
+
+* 指令取自 DVR 網頁 `js/lib/PtzCtrl.js`、`js/app/Live/live.js`：`ptzMoveCall`（chlId、actionType：Up／Down／Left／Right／LeftUp／LeftDown／RightUp／RightDown／ZoomIn／ZoomOut／Near／Far／IrisOpen／IrisClose／StopAction、speed 1–8）；`queryChlPresetList`、`goToPtzPreset`；支援雲台的頻道 = `queryNodeList` 條件 `<supportPtz/>`（排除 factoryName = Recorder）。
+* App：放大或單一畫面時（格寬 ≥ 480）滑鼠移上去多一個雲台按鈕，面板按住移動、放開停止，指令依序送出（避免「停止」比「移動」先到）；速度、預置點選單。
+
+| 日期 | 測試 | 結果 |
+|---|---|---|
+| 2026-11-06 | 唯讀查詢：使用者那台 1 個頻道支援雲台、預置點 0；8082／8083 回報 16 個都支援（類比同軸雲台，與網頁判斷相同） | ✅ 實體（未移動鏡頭） |
+| 2026-11-06 | Mac 編譯、DVRKit 40 項測試 | ✅ |
+| — | 實際轉動鏡頭、面板外觀 | ⏳ 待使用者用測試版 7 確認（不從遠端轉動現場攝影機） |

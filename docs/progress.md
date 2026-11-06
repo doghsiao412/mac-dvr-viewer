@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.5.7 測試版 7（build 39，`v1.5.7-beta7`）— 雲台控制**：`DVRConnection.ptzMove／ptzPresets／ptzGoToPreset／ptzChannelIds`、`PTZPad.swift`；放大畫面時滑鼠移上去出現雲台按鈕。`dvrcli ptz`（唯讀）／`ptz move`。實際轉動待使用者確認。
+
 * **1.5.7 測試版 6（build 38，`v1.5.7-beta6`）— 加密關鍵幀解密**：加密韌體的關鍵幀影像資料開頭 128 bytes 為 AES-128-ECB，金鑰是私有協定登入回覆 @68 的 16 bytes。使用者那台以 dvrcli 實測即時與回放皆可解碼；App 介面待確認。
 
 * **1.5.7 測試版 5（build 37，`v1.5.7-beta5`）**：加密韌體私有協定回覆類型為 0x0A（不是 0x06），統一處理。使用者那台待確認；影像訊框可能加密（見 test-results）。

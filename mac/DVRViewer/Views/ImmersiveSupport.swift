@@ -106,6 +106,16 @@ enum UITestHarness {
                 NSApp.terminate(nil)
                 return
             }
+            if scene == "ptz" {
+                // 放大第一格並打開雲台面板（等設備連線、查完雲台頻道）
+                store.mode = .live
+                store.enlargedSlot = 0
+                try? await Task.sleep(for: .seconds(10))
+                snap("ptz")
+                try? log.write(to: URL(fileURLWithPath: dir).appending(path: "layout.txt"), atomically: true, encoding: .utf8)
+                NSApp.terminate(nil)
+                return
+            }
             if scene == "discover" {
                 // 新增 DVR 視窗自動按「搜尋區網」，截取工作表視窗
                 try? await Task.sleep(for: .seconds(7))

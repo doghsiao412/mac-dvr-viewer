@@ -28,6 +28,8 @@ final class DeviceModel: Identifiable {
     private(set) var channels: [DVRChannel] = []
     private(set) var online: Set<String> = []
     private(set) var info: DVRConnection.DeviceInfo?
+    /// 支援雲台的頻道
+    private(set) var ptzChannels: Set<String> = []
     /// nil = 未知；false = 韌體不支援 WebSocket 影像串流
     private(set) var webStreaming: Bool?
     /// 這台裝置的鑰匙圈沒有此 DVR 的密碼（例如從其他 Mac 同步過來）
@@ -96,6 +98,7 @@ final class DeviceModel: Identifiable {
                 // 已知的韌體類型不覆蓋成未知（避免所有畫面停下來）
                 if let w = await conn.supportsWebStreaming { webStreaming = w }
                 online = (try? await conn.onlineChannelIds()) ?? Set(channels.map(\.id))
+                ptzChannels = await conn.ptzChannelIds()
                 status = .online
                 needsPassword = false
                 retry = 5

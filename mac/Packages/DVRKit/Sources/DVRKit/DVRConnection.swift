@@ -154,6 +154,32 @@ public actor DVRConnection {
     }
 
     /// 在線頻道（同時作為 Session 保活）
+    // MARK: - 雲台
+
+    public enum PTZAction: String, Sendable, CaseIterable {
+        case up = "Up", down = "Down", left = "Left", right = "Right"
+        case leftUp = "LeftUp", leftDown = "LeftDown", rightUp = "RightUp", rightDown = "RightDown"
+        case zoomIn = "ZoomIn", zoomOut = "ZoomOut", near = "Near", far = "Far"
+        case irisOpen = "IrisOpen", irisClose = "IrisClose", stop = "StopAction"
+    }
+
+    /// 支援雲台的頻道（查詢失敗或韌體不支援時回傳空集合）
+    public func ptzChannelIds() async -> Set<String> {
+        (try? await withSession { try await $0.ptzChannelIds() }) ?? []
+    }
+
+    public func ptzMove(channelId: String, action: PTZAction, speed: Int = 4) async throws {
+        try await withSession { try await $0.ptzMove(channelId: channelId, action: action.rawValue, speed: speed) }
+    }
+
+    public func ptzPresets(channelId: String) async throws -> [(index: Int, name: String)] {
+        try await withSession { try await $0.ptzPresets(channelId: channelId) }
+    }
+
+    public func ptzGoToPreset(channelId: String, index: Int, speed: Int = 4) async throws {
+        try await withSession { try await $0.ptzGoToPreset(channelId: channelId, index: index, speed: speed) }
+    }
+
     public func onlineChannelIds() async throws -> Set<String> {
         try await withSession { try await $0.onlineChannelIds() }
     }

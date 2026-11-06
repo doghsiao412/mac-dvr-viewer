@@ -234,6 +234,39 @@ public actor NVMSClient {
         }
     }
 
+    // MARK: - 雲台（DVR 網頁 js/lib/PtzCtrl.js、js/app/Live/live.js）
+
+    /// 支援雲台的頻道 ID（queryNodeList 條件 `<supportPtz/>`；網頁排除 factoryName = Recorder）
+    public func ptzChannelIds() async throws -> Set<String> {
+        let body = Self.request(#"<nodeType type="nodeType">chls</nodeType><condition><supportPtz/></condition>"#
+                                + "<requireField><name/><productModel/></requireField>")
+        let root = try await call("queryNodeList", body: body)
+        return Set(root.elements(forPath: "content/item").compactMap { item -> String? in
+            if item.elements(forName: "productModel").first?.attribute("factoryName") == "Recorder" { return nil }
+            return item.attribute("id")
+        })
+    }
+
+    /// 雲台動作：Up／Down／Left／Right／LeftUp／LeftDown／RightUp／RightDown／ZoomIn／ZoomOut／Near／Far／IrisOpen／IrisClose；
+    /// 放開時送 StopAction。speed 1–8（網頁預設 4）
+    public func ptzMove(channelId: String, action: String, speed: Int) async throws {
+        try await call("ptzMoveCall", body: Self.request(
+            "<content><chlId>\(channelId)</chlId><actionType>\(action)</actionType><speed>\(min(max(speed, 1), 8))</speed></content>"))
+    }
+
+    /// 預置點（index, 名稱）
+    public func ptzPresets(channelId: String) async throws -> [(index: Int, name: String)] {
+        let root = try await call("queryChlPresetList", body: Self.request("<condition><chlId>\(channelId)</chlId></condition>"))
+        return root.elements(forPath: "content/presets/item").enumerated().map { i, item in
+            (Int(item.attribute("index") ?? "") ?? i, item.stringValue)
+        }
+    }
+
+    public func ptzGoToPreset(channelId: String, index: Int, speed: Int) async throws {
+        try await call("goToPtzPreset", body: Self.request(
+            "<content><chlId>\(channelId)</chlId><index>\(index)</index><speed>\(min(max(speed, 1), 8))</speed></content>"))
+    }
+
     /// 目前在線的頻道 ID
     public func onlineChannelIds() async throws -> Set<String> {
         let root = try await call("queryOnlineChlList")

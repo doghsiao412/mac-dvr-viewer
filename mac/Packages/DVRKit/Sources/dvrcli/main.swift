@@ -1071,6 +1071,31 @@ func run() async -> Int32 {
         await conn.disconnect()
         return 0
     }
+    if cmd == "ptz" {
+        // ptz：列出支援雲台的頻道與預置點（唯讀，不移動鏡頭）
+        // ptz move <頻道> <動作> <毫秒> [--speed 4]：移動指定毫秒後自動送 StopAction（會實際轉動鏡頭）
+        let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+        do {
+            let chls = try await conn.connect()
+            if rest.first == "move", rest.count >= 4, let n = Int(rest[1]), n >= 1, n <= chls.count,
+               let action = DVRConnection.PTZAction(rawValue: rest[2]), let ms = Int(rest[3]) {
+                let id = chls[n - 1].id
+                try await conn.ptzMove(channelId: id, action: action, speed: args.int("speed", 4))
+                try await Task.sleep(for: .milliseconds(min(ms, 3000)))
+                try await conn.ptzMove(channelId: id, action: .stop)
+                print("■ 頻道 \(n) \(action.rawValue) \(ms) 毫秒後停止：✅ DVR 接受")
+            } else {
+                let ptz = await conn.ptzChannelIds()
+                print("■ 支援雲台的頻道：\(ptz.count) 個")
+                for c in chls where ptz.contains(c.id) {
+                    let presets = (try? await conn.ptzPresets(channelId: c.id)) ?? []
+                    print("   #\(c.index + 1) \(c.name)：預置點 \(presets.count) 個" + (presets.isEmpty ? "" : "（" + presets.prefix(8).map { "\($0.index)" }.joined(separator: "、") + "）"))
+                }
+            }
+        } catch { print("✖ \(error)"); await conn.disconnect(); return 1 }
+        await conn.disconnect()
+        return 0
+    }
     if cmd == "privkey" {
         // privkey [頻道]：診斷加密關鍵幀。用登入回覆中候選位置的 16 bytes 當 AES-128 金鑰，
         // 試解關鍵幀不同位置的 128 bytes，只印「解完是否出現起始碼」；不印金鑰、不存影像

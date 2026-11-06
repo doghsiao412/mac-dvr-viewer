@@ -14,6 +14,8 @@ struct VideoTile: View {
     @State private var pan: CGSize = .zero
     @State private var basePan: CGSize = .zero
     @State private var hovering = false
+    @State private var showPTZ = false
+    @State private var tileWidth: CGFloat = 0
 
     private struct StreamKey: Hashable {
         let ref: CameraRef
@@ -35,10 +37,22 @@ struct VideoTile: View {
         .overlay(alignment: .center) { statusOverlay }
         .overlay(alignment: .bottomLeading) { nameBar }
         .overlay(alignment: .topTrailing) { if hovering { tileButtons } }
+        .overlay(alignment: .bottomTrailing) {
+            if showPTZ && canPTZ {
+                PTZPad(connection: device.connection, channelID: ref.channelID) { store.showToast($0) }
+                    .padding(10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottomTrailing)))
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tileWidth = $0 }
+        .animation(.snappy(duration: 0.2), value: showPTZ)
         .onHover { hovering = $0 }
         .onChange(of: audioOn, initial: true) { _, on in controller.setAudio(on) }
         .onChange(of: store.volume, initial: true) { _, v in controller.setVolume(v) }
         .onAppear {
+            #if DEBUG
+            if UITestHarness.scene == "ptz" { showPTZ = true }
+            #endif
             controller.onLiveLimit = { [device] in store.noteLiveLimit(device.id) }
             controller.onAudioUnsupported = { [ref] in
                 if store.audioRef == ref { store.audioRef = nil }
@@ -110,6 +124,9 @@ struct VideoTile: View {
             iconButton(audioOn ? "speaker.wave.2.fill" : "speaker.slash", audioOn ? "關閉聲音" : "開啟聲音（同時只有一個畫面出聲）") {
                 toggleAudio()
             }
+            if canPTZ {
+                iconButton(showPTZ ? "dpad.fill" : "dpad", showPTZ ? "隱藏雲台控制" : "雲台控制") { showPTZ.toggle() }
+            }
             iconButton("camera", "截圖") {
                 store.saveSnapshot(controller.renderer.lastPixelBuffer, name: device.displayName(ref.channelID),
                                    time: controller.renderer.lastTime)
@@ -120,6 +137,9 @@ struct VideoTile: View {
     }
 
     private var audioOn: Bool { store.audioRef == ref }
+
+    /// 支援雲台、且畫面夠大（放大或單一畫面）時才提供雲台控制
+    private var canPTZ: Bool { device.ptzChannels.contains(ref.channelID) && tileWidth >= 480 }
 
     private func toggleAudio() {
         if audioOn { store.audioRef = nil; return }
