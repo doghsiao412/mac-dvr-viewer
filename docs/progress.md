@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.5.7 測試版 4（build 36，`v1.5.7-beta4`）— 私有協定加密登入**：較新韌體連影像服務 Port 時 "head" 帶加密旗標與亂數，登入要送 SHA1(MD5大寫+亂數)、帳號 XOR；`TVTPrivateClient.loginPayload`。私有協定登入被拒後 5 分鐘不重試。現有兩台回歸通過；使用者那台待確認。
+
 * **1.5.7 測試版 3（build 35，`v1.5.7-beta3`）**：測試版 2 在使用者那台登入後第一個查詢 Session 失效；改沿用 reqLogin 的 sessionId（doLogin 的備用）並加診斷訊息。區網搜尋已實體確認可用。
 
 * **1.5.7 測試版 2（build 34，`v1.5.7-beta2`）— 舊韌體 nonce 登入**：`NVMSClient.login()` 先試 `reqLogin`，有 nonce 就送 SHA1(MD5大寫+nonce) 大寫雜湊並在之後每個請求帶 `<token>`；不支援就沿用 Base64。現有兩台實體回歸通過；使用者區網那台待確認。

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Network
 
@@ -26,7 +27,7 @@ public actor TVTPrivateClient {
 
         public var description: String {
             switch self {
-            case .loginFailed(let c): return "私有協定登入失敗（\(String(format: "0x%08X", c))）：帳號或密碼錯誤、或帳號無遠端權限"
+            case .loginFailed(let c): return "私有協定登入失敗（\(String(format: "0x%08X", c))）：帳號或密碼錯誤、或帳號無遠端權限；為避免帳號被鎖，5 分鐘內不再重試"
             case .timeout(let s): return "私有協定逾時：\(s)"
             case .disconnected: return "私有協定連線已中斷"
             case .badReply(let s): return "私有協定回覆無法解析：\(s)"
@@ -57,6 +58,10 @@ public actor TVTPrivateClient {
     public private(set) var isConnected = false
     /// 登入回應原始資料（含設備 GUID 等；用來辨識連到的是哪一台設備）
     public private(set) var loginReply = Data()
+    /// 連線後 DVR 先送的 64 bytes "head"（較新韌體在 @0x2C 帶加密旗標、@0x2D 帶 24 位元亂數）
+    private var greeting: Data?
+    /// 這次登入是否用了加密（診斷用）
+    public private(set) var usedEncryptedLogin = false
 
     public init(host: String, port: Int) {
         self.host = host
@@ -73,14 +78,14 @@ public actor TVTPrivateClient {
         buffer = Data()
         fragments = [:]
         nextId = 0
+        greeting = nil
         username = user
         readerTask = Task { [weak self] in await self?.readLoop(l) }
 
-        var p = Data(count: 236)
-        p.putU32(3, at: 0)
-        p.putString(user, at: 36, max: 63)
-        p.putString(password, at: 100, max: 63)
-        p.putU32(0xCD, at: 200)
+        // 等 DVR 先送的 "head"（最多 3 秒；沒收到就用明文登入，與舊韌體相同）
+        for _ in 0..<30 where greeting == nil { try? await Task.sleep(for: .milliseconds(100)) }
+        usedEncryptedLogin = greeting.map { Self.encryptFlag($0) != 0 } ?? false
+        let p = Self.loginPayload(user: user, password: password, greeting: greeting, random: UInt32.random(in: 0..<10_000_000))
         let reply = try await request(cmd: 0x0100_0003, sub: 0x101, payload: p, timeout: .seconds(10))
         guard reply.sub == 0x1000_0101, reply.data.count >= 100 else {
             let code = reply.data.count >= 4 ? reply.data.u32le(at: 0) : reply.sub
@@ -97,6 +102,43 @@ public actor TVTPrivateClient {
                 await self?.sendHeartbeat()
             }
         }
+    }
+
+    // MARK: - 登入封包（原廠 SDK CNVRNetDevice_N9000::Login）
+
+    static func encryptFlag(_ head: Data) -> UInt8 { head.count > 0x2C ? head[head.startIndex + 0x2C] : 0 }
+
+    static func headNonce(_ head: Data) -> UInt32 {
+        guard head.count >= 0x30 else { return 0 }
+        let b = head.startIndex
+        return UInt32(head[b + 0x2D]) | UInt32(head[b + 0x2E]) << 8 | UInt32(head[b + 0x2F]) << 16
+    }
+
+    /// 登入 payload（236 bytes）：帳號 @36、密碼 @100（各 64 bytes）。
+    /// "head" 帶加密旗標時：密碼欄 = SHA1(MD5 大寫 hex(密碼) + 亂數補滿 8 位) 的 20 bytes 原始值；
+    /// 旗標含 0x02 時帳號逐字與 "亂數十進位字串" 循環 XOR（0 不處理）；@204 放 0–9999999 的隨機數。
+    static func loginPayload(user: String, password: String, greeting: Data?, random: UInt32) -> Data {
+        var p = Data(count: 236)
+        p.putU32(3, at: 0)
+        p.putString(user, at: 36, max: 63)
+        p.putU32(0xCD, at: 200)
+        guard let g = greeting, encryptFlag(g) != 0 else {
+            p.putString(password, at: 100, max: 63)
+            return p
+        }
+        let flag = encryptFlag(g), nonce = headNonce(g)
+        let md5 = Insecure.MD5.hash(data: Data(password.utf8)).map { String(format: "%02X", $0) }.joined()
+        let sha = Data(Insecure.SHA1.hash(data: Data((md5 + String(format: "%08u", nonce)).utf8)))
+        p.replaceSubrange((p.startIndex + 100)..<(p.startIndex + 120), with: sha)
+        if flag & 0x02 != 0 {
+            let key = Array(String(nonce).utf8)
+            for i in 0..<64 {
+                let at = p.startIndex + 36 + i
+                if p[at] != 0 { p[at] ^= key[i % key.count] }
+            }
+        }
+        p.putU32(random, at: 204)
+        return p
     }
 
     public func disconnect() {
@@ -316,6 +358,7 @@ public actor TVTPrivateClient {
             let tag = buffer[o..<(o + 4)]
             if tag == head {
                 guard buffer.endIndex - o >= 64 else { break }
+                if greeting == nil { greeting = buffer.subdata(in: o..<(o + 64)) }
                 o += 64
                 continue
             }

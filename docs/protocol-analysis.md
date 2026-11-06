@@ -301,3 +301,5 @@ CMD_HTTP_REQUEST (0x1010D00)：在私有通道內傳送 HTTP 式 XML 設定請�
 * 部分韌體（實例：1.4.4…B200923，網頁資源 20200602.01）：`POST /reqLogin`（body 含 `<token>null</token>`）回 `sessionId`／`nonce`／`token`（都帶大括號）。`doLogin` 帶 Cookie `sessionId=<去括號>` 與 `<token>`，密碼 = SHA1 大寫 hex(MD5 大寫 hex(明文) + nonce 原樣含括號)；回應不一定有 sessionId，沿用 reqLogin 的。之後所有請求的 XML 都要帶 `<token>`。失敗回應有 `ramainingNumber`、`locked`。
 * 其他韌體（8083、8082 兩台）：`reqLogin` 回 fail 536870934，`doLogin` 用 Base64 明文密碼。
 * `NVMSClient.login()` 依 reqLogin 是否成功自動選擇。
+
+* 私有協定（SERVICE Port）登入：連線後 DVR 先送 64 bytes `head`。@0x2C 非 0 時要加密登入（原廠 SDK `CNVRNetDevice_N9000::Login`）：密碼欄 20 bytes = SHA1(MD5 大寫 hex(密碼) + `%08d`(亂數))，亂數 = @0x2D | @0x2E<<8 | @0x2F<<16；@0x2C 含 0x02 時帳號欄非 0 位元組與 `%u`(亂數) 字串循環 XOR；payload @204 放 rand()%10000000。@0x2C 為 0 時沿用明文。

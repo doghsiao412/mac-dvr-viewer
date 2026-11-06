@@ -294,6 +294,8 @@ public actor DVRConnection {
     private func privateSession() async throws -> TVTPrivateClient {
         if let c = privateClient, await c.isConnected { return c }
         if let t = privateConnectTask { return try await t.value }
+        // 私有協定帳密被拒後 5 分鐘內不再送登入（每格畫面都會重連，連續失敗會讓 DVR 鎖帳號）
+        if let (until, err) = privateLoginBlocked, until > Date() { throw err }
         let host = host, port = servicePort, user = username, provider = passwordProvider
         let sn = serialNumber
         let t = Task<TVTPrivateClient, Error> {
@@ -309,7 +311,12 @@ public actor DVRConnection {
         }
         privateConnectTask = t
         defer { privateConnectTask = nil }
-        let c = try await t.value
+        let c: TVTPrivateClient
+        do { c = try await t.value } catch {
+            if case TVTPrivateClient.ClientError.loginFailed = error { privateLoginBlocked = (Date().addingTimeInterval(300), error) }
+            throw error
+        }
+        privateLoginBlocked = nil
         privateClient = c
         return c
     }
@@ -368,6 +375,8 @@ public actor DVRConnection {
 
     /// 網頁 API 的設備序號（用來確認私有協定連到同一台設備）
     private var serialNumber: String?
+    /// 私有協定登入被拒：到此時間前不再嘗試
+    private var privateLoginBlocked: (Date, Error)?
     /// 最近一次私有協定連線失敗的原因（顯示給使用者）
     private var privateFailure: String?
 
