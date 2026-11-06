@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.5.7 測試版 3（build 35，`v1.5.7-beta3`）**：測試版 2 在使用者那台登入後第一個查詢 Session 失效；改沿用 reqLogin 的 sessionId（doLogin 的備用）並加診斷訊息。區網搜尋已實體確認可用。
+
 * **1.5.7 測試版 2（build 34，`v1.5.7-beta2`）— 舊韌體 nonce 登入**：`NVMSClient.login()` 先試 `reqLogin`，有 nonce 就送 SHA1(MD5大寫+nonce) 大寫雜湊並在之後每個請求帶 `<token>`；不支援就沿用 Base64。現有兩台實體回歸通過；使用者區網那台待確認。
 
 * **1.5.7 測試版（build 33，GitHub 預先發行 `v1.5.7-beta1`、分支 `beta/lan-discovery`，未更新 appcast）— 區網搜尋 DVR**：新增 DVR 視窗加「搜尋區網中的 DVR」，用 TVT 原廠搜尋（234.55.55.55／.56:23456）＋ONVIF WS-Discovery，點結果帶入 IP、網頁 Port、影像服務 Port。`DVRKit/LANDiscovery.swift`、`dvrcli discover`。Mock 與本機假 DVR 驗證通過；**實體 DVR 未驗證**（Port 位元組順序待確認）。正式版請用 build ≥ 34。iPhone 無多播權限，不做。

@@ -18,6 +18,12 @@ public actor NVMSClient {
     public private(set) var loginInfo: LoginInfo?
     /// reqLogin 取得的 token（有的韌體每個請求都要帶）
     public private(set) var token: String?
+    /// nonce 登入時 doLogin 回傳的另一組 sessionId（網頁用 reqLogin 的；被判定失效時改用這組試一次）
+    private var altSessionId: String?
+    /// nonce 登入後尚未有任何指令成功（第一個指令就失效時附上診斷，不觸發重新登入以免多耗嘗試次數）
+    private var nonceSessionUnconfirmed = false
+    /// doLogin 回應的欄位名稱（不含內容），診斷用
+    private var loginResponseFields = ""
 
     private let session: URLSession
 
@@ -82,12 +88,23 @@ public actor NVMSClient {
     /// 傳送指令並回傳 `<response>` 根節點。`status != success` 時丟出 `NVMSError.device`。
     @discardableResult
     public func call(_ command: String, body: String? = nil) async throws -> DVRXMLElement {
-        let root = try await post(command, body: body)
-        let status = root.text("status")
-        if status != "success" {
-            let code = Int(root.text("errorCode") ?? "") ?? -1
+        var root = try await post(command, body: body)
+        var code = Int(root.text("errorCode") ?? "") ?? -1
+        // nonce 登入後第一次被判定 Session 失效：改用 doLogin 回傳的 sessionId 再試一次（不重新送密碼）
+        if root.text("status") != "success", [536_870_934, 536_871_011].contains(code), let alt = altSessionId {
+            altSessionId = nil
+            sessionId = alt
+            root = try await post(command, body: body)
+            code = Int(root.text("errorCode") ?? "") ?? -1
+        }
+        if root.text("status") != "success" {
+            if nonceSessionUnconfirmed, [536_870_934, 536_871_011].contains(code) {
+                nonceSessionUnconfirmed = false
+                throw NVMSError.transport("登入成功但 DVR 不接受之後的查詢（\(command) \(code)）。診斷：驗證碼登入，doLogin 回應欄位［\(loginResponseFields)］")
+            }
             throw NVMSError.device(command: command, code: code)
         }
+        if command != "reqLogin" && command != "doLogin" { altSessionId = nil; nonceSessionUnconfirmed = false }   // 這組已確認可用
         return root
     }
 
@@ -115,6 +132,7 @@ public actor NVMSClient {
     public func login(user: String, password: String) async throws -> LoginInfo {
         sessionId = nil
         token = nil
+        altSessionId = nil
         // 1. 支援 reqLogin 的韌體：取 nonce／token／sessionId，密碼送雜湊；不支援（回失敗）就用 Base64
         var pw = Data(password.utf8).base64EncodedString()
         if let r = try? await call("reqLogin", body: Self.request("<token>null</token>")),
@@ -136,8 +154,17 @@ public actor NVMSClient {
                                         remaining: (root.text("ramainingNumber") ?? root.text("content/ramainingNumber")).flatMap { Int($0) },
                                         locked: (root.text("locked") ?? root.text("content/locked")) == "true")
         }
-        // 3. sessionId：doLogin 回應有就用，沒有就沿用 reqLogin 的
-        if let s = root.text("content/sessionId"), !s.isEmpty { sessionId = Self.stripBraces(s) }
+        // 3. sessionId：nonce 登入照網頁沿用 reqLogin 的（doLogin 的另存備用）；Base64 登入用 doLogin 回傳的
+        altSessionId = nil
+        nonceSessionUnconfirmed = token != nil
+        loginResponseFields = (root.elements(forName: "content").first?.children ?? root.children).map(\.name).joined(separator: "、")
+        if let s = root.text("content/sessionId").map(Self.stripBraces), !s.isEmpty {
+            if token != nil, let current = sessionId {
+                if s != current { altSessionId = s }
+            } else {
+                sessionId = s
+            }
+        }
         guard sessionId != nil else { throw NVMSError.badXML("doLogin 回應沒有 sessionId") }
         let info = LoginInfo(
             userId: root.text("content/userId") ?? "",
