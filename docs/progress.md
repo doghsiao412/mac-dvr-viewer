@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.6 已發佈（build 41）**：1.5.7 測試版 1–8（分支 `beta/lan-discovery`）併入 main：區網搜尋 DVR、舊韌體 nonce 登入、私有協定加密登入與關鍵幀 AES 解密、登入剩餘次數與 5 分鐘不重試、雲台控制。測試版預先發行已刪除。已知：iPhone 無區網搜尋；雲台方向轉動未在實體雲台驗證（使用者那台只能變焦）；那台子串流時間戳不準。
+
 * **1.5.7 測試版 8（build 40，`v1.5.7-beta8`）**：變焦方向對調（照網頁）、對焦改「近／遠」文字。
 
 * **1.5.7 測試版 7（build 39，`v1.5.7-beta7`）— 雲台控制**：`DVRConnection.ptzMove／ptzPresets／ptzGoToPreset／ptzChannelIds`、`PTZPad.swift`；放大畫面時滑鼠移上去出現雲台按鈕。`dvrcli ptz`（唯讀）／`ptz move`。實際轉動待使用者確認。

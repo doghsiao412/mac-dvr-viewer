@@ -4,12 +4,19 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.5.6</title>
-      <pubDate>Thu, 05 Nov 2026 06:12:05 GMT</pubDate>
-      <sparkle:version>32</sparkle:version>
-      <sparkle:shortVersionString>1.5.6</sparkle:shortVersionString>
+      <title>DVR Viewer 1.6</title>
+      <pubDate>Fri, 06 Nov 2026 11:15:00 GMT</pubDate>
+      <sparkle:version>41</sparkle:version>
+      <sparkle:shortVersionString>1.6</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.5.6
+      <description sparkle:format="markdown"><![CDATA[v1.6
+
+- 新增 DVR 時可以搜尋區網：Mac 和 DVR 在同一個區網時，按「搜尋區網中的 DVR」，點一下找到的設備就會帶入 IP、網頁 Port 和影像服務 Port。支援 TVT 原廠搜尋和 ONVIF 設備搜尋，只送出詢問封包，不會一個一個 IP 去掃。
+- 支援更多韌體的 DVR：修正部分韌體的 DVR 帳號密碼正確卻無法登入，或登入後畫面全黑的問題。App 會自動判斷 DVR 需要的登入和加密影像方式，不用另外設定。
+- 避免帳號被鎖：登入失敗時會顯示 DVR 回報的剩餘嘗試次數。影像連線的帳密被拒時，5 分鐘內不再重試。
+- 雲台控制：放大單一畫面時，滑鼠移到畫面上會出現雲台按鈕，可以轉動方向、變焦、對焦、調整速度，以及呼叫預置點。
+
+v1.5.6
 
 - 修正網路短暫中斷時，誤判為「DVR 同時影像連線已達上限」並跳出設定提示的問題；現在會顯示「無法連線到 DVR」，網路恢復後自動接回。
 - 修正上述誤判後，部分畫面持續改走備用連線的問題。
@@ -195,11 +202,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.5.6/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.5.6/DVR-Viewer-1.5.6.dmg" sparkle:edSignature="N4C1LXRUCosX68Fmx093WApmmG7D82QnORAeuSjAAOyEI9xf+H9NaXYpk2Htf6lU0tQW/q/St2il4CVjfRfpBw==" length="2989594" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.6/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.6/DVR-Viewer-1.6.dmg" sparkle:edSignature="kyXM+W4GgPqnV200q6azg6tri1eY7BOVA1sJfwa2K1sacMC87nS8kLllF9kMEt0pJ+h3pGsMwnnHBij0qV1EBg==" length="3122692" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: ScadwHn8kkcWeK0ttusrsDhCRmy/l5zGi3hfL0oPkAi1yvgyKaMsPqVdzu495G1veZDypdovBR6K8HCGbfHgBA==
-length: 12503
+edSignature: MLNtLMFKHqsqOEXDwJeS3JI2nuVFYFa33V2YII22/zi3aog9s7Tjj5m4Dcdz2UVr5N8ZmSkQjdPb835uSTVTCQ==
+length: 13308
 -->
