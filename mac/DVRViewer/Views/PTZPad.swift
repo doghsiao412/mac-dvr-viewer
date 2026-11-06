@@ -26,8 +26,21 @@ struct PTZPad: View {
                 GridRow { key(.leftDown, "arrow.down.left"); key(.down, "arrow.down"); key(.rightDown, "arrow.down.right") }
             }
             HStack(spacing: 12) {
-                pair("變焦", (.zoomOut, "minus.magnifyingglass"), (.zoomIn, "plus.magnifyingglass"))
-                pair("對焦", (.near, "circle.dashed"), (.far, "circle"))
+                // DVR 指令名稱與畫面效果相反：網頁的「放大」鍵送 ZoomOut（js/lib/PtzCtrl.js：zoomIn → ZoomOut），使用者實測確認
+                VStack(spacing: 3) {
+                    HStack(spacing: 4) {
+                        key(.zoomIn, "minus.magnifyingglass", help: "縮小（拉遠）")
+                        key(.zoomOut, "plus.magnifyingglass", help: "放大（拉近）")
+                    }
+                    Text("變焦").font(.caption2).foregroundStyle(.secondary)
+                }
+                VStack(spacing: 3) {
+                    HStack(spacing: 4) {
+                        key(.near, text: "近", help: "對焦近處（讓近的東西清楚）")
+                        key(.far, text: "遠", help: "對焦遠處（讓遠的東西清楚）")
+                    }
+                    Text("對焦").font(.caption2).foregroundStyle(.secondary)
+                }
             }
             HStack(spacing: 6) {
                 Image(systemName: "tortoise").font(.caption2).foregroundStyle(.secondary)
@@ -50,31 +63,27 @@ struct PTZPad: View {
         .onDisappear { if active != nil { send(.stop) } }
     }
 
-    private func pair(_ title: String, _ a: (A, String), _ b: (A, String)) -> some View {
-        VStack(spacing: 3) {
-            HStack(spacing: 4) { key(a.0, a.1); key(b.0, b.1) }
-            Text(title).font(.caption2).foregroundStyle(.secondary)
-        }
-    }
-
     /// 按住送動作、放開送停止
-    private func key(_ action: A, _ symbol: String) -> some View {
-        Image(systemName: symbol)
-            .font(.callout.weight(.semibold))
-            .frame(width: 32, height: 32)
-            .background(active == action ? AnyShapeStyle(.tint.opacity(0.35)) : AnyShapeStyle(.white.opacity(0.08)), in: .rect(cornerRadius: 8))
-            .contentShape(.rect)
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard active == nil else { return }
-                    active = action
-                    send(action)
-                }
-                .onEnded { _ in
-                    guard active != nil else { return }
-                    active = nil
-                    send(.stop)
-                })
+    private func key(_ action: A, _ symbol: String? = nil, text: String? = nil, help: String? = nil) -> some View {
+        Group {
+            if let symbol { Image(systemName: symbol).font(.callout.weight(.semibold)) }
+            else { Text(text ?? "").font(.callout.weight(.semibold)) }
+        }
+        .frame(width: 32, height: 32)
+        .background(active == action ? AnyShapeStyle(.tint.opacity(0.35)) : AnyShapeStyle(.white.opacity(0.08)), in: .rect(cornerRadius: 8))
+        .contentShape(.rect)
+        .help(help ?? "")
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { _ in
+                guard active == nil else { return }
+                active = action
+                send(action)
+            }
+            .onEnded { _ in
+                guard active != nil else { return }
+                active = nil
+                send(.stop)
+            })
     }
 
     private func send(_ action: A) {

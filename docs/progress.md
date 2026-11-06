@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.5.7 測試版 8（build 40，`v1.5.7-beta8`）**：變焦方向對調（照網頁）、對焦改「近／遠」文字。
+
 * **1.5.7 測試版 7（build 39，`v1.5.7-beta7`）— 雲台控制**：`DVRConnection.ptzMove／ptzPresets／ptzGoToPreset／ptzChannelIds`、`PTZPad.swift`；放大畫面時滑鼠移上去出現雲台按鈕。`dvrcli ptz`（唯讀）／`ptz move`。實際轉動待使用者確認。
 
 * **1.5.7 測試版 6（build 38，`v1.5.7-beta6`）— 加密關鍵幀解密**：加密韌體的關鍵幀影像資料開頭 128 bytes 為 AES-128-ECB，金鑰是私有協定登入回覆 @68 的 16 bytes。使用者那台以 dvrcli 實測即時與回放皆可解碼；App 介面待確認。
