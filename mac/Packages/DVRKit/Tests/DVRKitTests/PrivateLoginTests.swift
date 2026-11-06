@@ -41,4 +41,11 @@ struct PrivateLoginTests {
         #expect(pw == "8daabd35b15af71243b4a9b74406adeddd090150")
         #expect(p.cString(at: 36, max: 64) == "admin")   // 旗標沒有 0x02：帳號不混淆
     }
+
+    @Test func replyTypeNormalized() {
+        #expect(TVTPrivateClient.normalizedCmd(0x0100_000A) == 0x0100_0006)   // 實測：加密韌體的登入回覆
+        #expect(TVTPrivateClient.normalizedCmd(0x0100_0006) == 0x0100_0006)
+        #expect(TVTPrivateClient.normalizedCmd(0x0002_000A) == 0x0002_0006)
+        #expect(TVTPrivateClient.normalizedCmd(0x0100_0003) == 0x0100_0003)
+    }
 }

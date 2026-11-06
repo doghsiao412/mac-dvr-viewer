@@ -404,8 +404,11 @@ public actor TVTPrivateClient {
 
     static let debug = ProcessInfo.processInfo.environment["DVRKIT_DEBUG"] == "1"
 
+    /// 支援加密的韌體（"head" @0x2C 非 0）回覆的類型低位元組是 0x0A，其餘是 0x06：統一成 0x06 處理
+    static func normalizedCmd(_ cmd: UInt32) -> UInt32 { cmd & 0xFF == 0x0A ? (cmd & ~0xFF) | 0x06 : cmd }
+
     private func handle(_ body: Data) {
-        let cmd = body.u32le(at: 0), sub = body.u32le(at: 4), id = body.u32le(at: 8)
+        let cmd = Self.normalizedCmd(body.u32le(at: 0)), sub = body.u32le(at: 4), id = body.u32le(at: 8)
         let data = body.subdata(in: (body.startIndex + 16)..<body.endIndex)
         switch cmd {
         case 0x0100_0006, 0x0102_0006:
