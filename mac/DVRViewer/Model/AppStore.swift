@@ -15,7 +15,23 @@ final class AppStore {
     // Live
     // 目前自訂畫面的工作副本（變更會寫回 customViews）
     var layout: Int = 4 { didSet { syncCustom() } }          // 1 / 4 / 9 / 16
-    var slots: [CameraRef?] = Array(repeating: nil, count: AppStore.maxSlots) { didSet { syncCustom() } }
+    var slots: [CameraRef?] = Array(repeating: nil, count: AppStore.maxSlots) {
+        didSet {
+            // 同一支攝影機只能在一格：兩格同時開同一路串流，DVR 會把舊的踢掉，造成兩格輪流斷線
+            let d = Self.deduped(slots)
+            if d != slots { slots = d }
+            syncCustom()
+        }
+    }
+
+    /// 重複的攝影機只保留第一格（舊版存下的自訂畫面、或其他 Mac 同步來的資料也會整理）
+    static func deduped(_ s: [CameraRef?]) -> [CameraRef?] {
+        var seen = Set<CameraRef>()
+        return s.map { r in
+            guard let r else { return nil }
+            return seen.insert(r).inserted ? r : nil
+        }
+    }
 
     /// 使用者建立的自訂畫面（可新增、移除、命名）
     struct CustomView: Codable, Identifiable, Equatable {
@@ -497,7 +513,15 @@ final class AppStore {
 
     func assign(_ ref: CameraRef, to slot: Int) {
         guard isCustomLive, slot >= 0, slot < Self.maxSlots else { return }
-        slots[slot] = ref
+        if let j = slots.firstIndex(of: ref), j != slot {
+            // 已經在別格：兩格對調（等於把它移過來），不會出現兩格同一支
+            var s = slots
+            s.swapAt(j, slot)
+            slots = s
+            if enlargedSlot == j { enlargedSlot = slot }
+        } else {
+            slots[slot] = ref
+        }
         focusedSlot = slot
     }
 
