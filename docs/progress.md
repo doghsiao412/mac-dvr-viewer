@@ -9,6 +9,10 @@
 
 ## 下一版待辦
 
+* **iPhone 自動重裝（2026-11-08）**：`tools/iphone-autoinstall.sh` ＋ launchd `~/Library/LaunchAgents/local.dvrviewer.phone-autoinstall.plist`（每 30 分鐘）。上次成功安裝滿 5 天、iPhone 在線且解鎖時，用已提交版本（git archive HEAD）編譯並以 devicectl 安裝，成功／編譯失敗發通知。iPhone UDID 存在本機 `~/Library/Application Support/DVRViewerPhoneAuto/device-id`，不進 repo。紀錄 `~/Library/Logs/DVRViewerPhoneAuto.log`。
+
+* **iPhone 版跟上 1.6（2026-11-08，已裝到使用者 iPhone）**：共用 DVRKit 已含舊韌體 nonce 登入、私有協定加密登入與關鍵幀解密、登入剩餘次數；`PTZPad.swift` 移到 `mac/Shared/`（iOS 按鍵 50 pt），單頻道頁右上角雲台按鈕開半高工作表。iPhone 編譯通過（未簽章）；無模擬器，畫面未驗證。區網搜尋 iPhone 不做（多播權限）。
+
 * **1.6.1 已發佈（build 42）**：自訂畫面同一支攝影機只能在一格（`AppStore.slots` didSet 去重複、`assign` 已在別格時對調）。原因：兩格開同一路串流，DVR 會踢掉舊的，兩格輪流斷線（私有協定的接收端也是同頻道只送給最新任務）。未處理：獨立攝影機視窗與主畫面同時開同一支，理論上也會衝突。
 
 * **1.6 已發佈（build 41）**：1.5.7 測試版 1–8（分支 `beta/lan-discovery`）併入 main：區網搜尋 DVR、舊韌體 nonce 登入、私有協定加密登入與關鍵幀 AES 解密、登入剩餘次數與 5 分鐘不重試、雲台控制。測試版預先發行已刪除。已知：iPhone 無區網搜尋；雲台方向轉動未在實體雲台驗證（使用者那台只能變焦）；那台子串流時間戳不準。

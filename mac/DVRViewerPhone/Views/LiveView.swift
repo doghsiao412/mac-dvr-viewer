@@ -19,6 +19,8 @@ struct LiveView: View {
     @AppStorage("phone.live.mainStream") private var mainStream = false
     @AppStorage("phone.live.audio") private var audioOn = false
     @State private var showControls = true
+    @State private var showPTZ = false
+    @State private var ptzError: String?
     /// 畫面在最上層（推入回放頁時停止即時串流）
     @State private var visible = false
     @Environment(\.verticalSizeClass) private var vSize
@@ -74,6 +76,11 @@ struct LiveView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: audioOn, initial: true) { _, on in controller.setAudio(on) }
         .toolbar {
+            if device.ptzChannels.contains(channelID) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showPTZ.toggle() } label: { Label("雲台控制", systemImage: showPTZ ? "dpad.fill" : "dpad") }
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: PhoneRoute.playback(CameraRef(deviceID: device.id, channelID: channelID))) {
                     Label("錄影回放", systemImage: "clock.arrow.circlepath")
@@ -85,6 +92,17 @@ struct LiveView: View {
             guard visible, scenePhase != .background, device.webStreaming != nil else { return }  // 等待偵測完成（WebSocket 或私有協定）
             await controller.run(connection: device.connection, channelID: channelID, mainStream: mainStream)
         }
+        // 雲台面板：半高工作表，影像仍在上方可見
+        .sheet(isPresented: $showPTZ) {
+            PTZPad(connection: device.connection, channelID: channelID) { ptzError = $0 }
+                .presentationDetents([.height(420)])
+                .presentationBackgroundInteraction(.enabled)
+                .presentationDragIndicator(.visible)
+        }
+        .onChange(of: channelID) { _, _ in showPTZ = false }
+        .alert("雲台", isPresented: Binding(get: { ptzError != nil }, set: { if !$0 { ptzError = nil } })) {
+            Button("好") { ptzError = nil }
+        } message: { Text(ptzError ?? "") }
         .onAppear { visible = true; UIApplication.shared.isIdleTimerDisabled = true }   // 看影像時不自動鎖定
         .onDisappear { visible = false; UIApplication.shared.isIdleTimerDisabled = false }
     }

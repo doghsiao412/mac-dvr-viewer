@@ -13,6 +13,11 @@ struct PTZPad: View {
     @State private var queue = PTZSendQueue()
 
     private typealias A = DVRConnection.PTZAction
+    #if os(iOS)
+    private let keySize: CGFloat = 50   // 手指操作
+    #else
+    private let keySize: CGFloat = 32
+    #endif
 
     var body: some View {
         VStack(spacing: 10) {
@@ -20,7 +25,7 @@ struct PTZPad: View {
                 GridRow { key(.leftUp, "arrow.up.left"); key(.up, "arrow.up"); key(.rightUp, "arrow.up.right") }
                 GridRow {
                     key(.left, "arrow.left")
-                    Image(systemName: "video").font(.caption).foregroundStyle(.secondary).frame(width: 32, height: 32)
+                    Image(systemName: "video").font(.caption).foregroundStyle(.secondary).frame(width: keySize, height: keySize)
                     key(.right, "arrow.right")
                 }
                 GridRow { key(.leftDown, "arrow.down.left"); key(.down, "arrow.down"); key(.rightDown, "arrow.down.right") }
@@ -44,7 +49,7 @@ struct PTZPad: View {
             }
             HStack(spacing: 6) {
                 Image(systemName: "tortoise").font(.caption2).foregroundStyle(.secondary)
-                Slider(value: $speed, in: 1...8, step: 1).frame(width: 90).controlSize(.mini)
+                Slider(value: $speed, in: 1...8, step: 1).frame(width: keySize * 3).controlSize(.mini)
                 Image(systemName: "hare").font(.caption2).foregroundStyle(.secondary)
             }
             .help("雲台速度 \(Int(speed))")
@@ -54,7 +59,10 @@ struct PTZPad: View {
                         Button(p.name.isEmpty ? "預置點 \(p.index)" : p.name) { goTo(p.index) }
                     }
                 } label: { Label("預置點", systemImage: "mappin.and.ellipse") }
-                .menuStyle(.button).buttonStyle(.glass).controlSize(.small).fixedSize()
+                #if os(macOS)
+                .menuStyle(.button)
+                #endif
+                .buttonStyle(.glass).controlSize(.small).fixedSize()
             }
         }
         .padding(12)
@@ -69,7 +77,7 @@ struct PTZPad: View {
             if let symbol { Image(systemName: symbol).font(.callout.weight(.semibold)) }
             else { Text(text ?? "").font(.callout.weight(.semibold)) }
         }
-        .frame(width: 32, height: 32)
+        .frame(width: keySize, height: keySize)
         .background(active == action ? AnyShapeStyle(.tint.opacity(0.35)) : AnyShapeStyle(.white.opacity(0.08)), in: .rect(cornerRadius: 8))
         .contentShape(.rect)
         .help(help ?? "")
