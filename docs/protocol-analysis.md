@@ -304,3 +304,48 @@ CMD_HTTP_REQUEST (0x1010D00)：在私有通道內傳送 HTTP 式 XML 設定請�
 
 * 私有協定（SERVICE Port）登入：連線後 DVR 先送 64 bytes `head`。@0x2C 非 0 時要加密登入（原廠 SDK `CNVRNetDevice_N9000::Login`）：密碼欄 20 bytes = SHA1(MD5 大寫 hex(密碼) + `%08d`(亂數))，亂數 = @0x2D | @0x2E<<8 | @0x2F<<16；@0x2C 含 0x02 時帳號欄非 0 位元組與 `%u`(亂數) 字串循環 XOR；payload @204 放 rand()%10000000。@0x2C 為 0 時沿用明文。
 * 加密韌體（head @0x2C 非 0）的私有協定回覆類型低位元組為 0x0A（一般為 0x06）。關鍵幀（SHFL @7 = 1）的影像資料（SHFL 標頭 68 + 延伸區長度 @45 之後）開頭 128 bytes 以 AES-128-ECB 加密，金鑰 = 登入回覆 payload @68 的 16 bytes。
+
+## 0.6 加密韌體與其他機種：SDK 已讀出但尚未實作的細節（2026-11-09 整理）
+
+來源：2BAD/tvt 附的原廠 Linux SDK `bin/linux/libdvrnetsdk.so`（x86-64、未 strip，只用 `nm -C`／`objdump -d`／`strings` 讀取，不執行；不要把檔案複製進本 repo）。以下位址皆指這個檔案，方便下次直接反組譯對照。
+**狀態標記**：✅ 已實作並實體驗證；📖 只讀過 SDK、App 尚未實作、未驗證。
+
+### 私有協定連線後的 64 bytes `head`
+| 位置 | 意義 | 狀態 |
+|---|---|---|
+| @0x2A | 疑似協定版本：加密韌體為 4、8082／8083 為 3。登入封包 cmd 低位元組 SDK 固定送 4，但實測送 3 也會回覆 | 📖 |
+| @0x2C | 加密旗標（SDK 存在 `0xa14`）。非 0：密碼送 SHA1(MD5 大寫 hex(密碼) + `%08d` 亂數) 的 20 bytes；含 0x02：帳號欄與 `%u`(亂數) 字串循環 XOR（`ProcessBuf` 0xfbc60） | ✅ |
+| @0x2D–2F | 24 位元亂數（每次連線不同），LE：@0x2D \| @0x2E<<8 \| @0x2F<<16 | ✅ |
+| @0x34 | 第二旗標（`SetEncryptInfo` 0xf8fd0 存到 `0xa15`）。使用者那台為 2，8082／8083 為 0。控制 XML 指令加密與訊框解密（見下） | 📖 |
+
+### 金鑰
+* 登入回覆 payload（去掉 16 bytes 標頭後）前 0x84 bytes 被複製到裝置物件 `+0x6b0`；金鑰 = `BinToHex(+0x6f4, 16)`，也就是**登入回覆 @68 的 16 bytes**，用時再 `HexToBin` 回原值。✅（`Login` 0x15d640 的 0x15db4e 起）
+* `Login` 在加密模式另外算了 SHA1(MD5 大寫(密碼) + `%08d`(`0xa5c`))（0x15dfc7 起，`0xa5c` 初值 0），結果沒有用在金鑰上；推測是斷線重登用。📖 若遇到重登失敗再看。
+
+### 影像訊框解密（`ECMSToDevFrame` 0x136500，解密在 0x1368b2）
+* 條件：`0xa15` 非 0、訊框資訊 +7（關鍵幀）非 0、訊框資訊 +0x54（加密旗標）非 0。
+* `CDataEncryption::DecryptDataWithKey`（0x2336e0）：金鑰 hex → 16 bytes → `AES_set_decrypt_key(128)` → `DecryptData`（0x233300，逐 16 bytes `AES_ecb_encrypt(..., DECRYPT)`）解 **128 bytes**，再用 `GetCRC32(0, 解出資料, 128)` 與訊框資訊 +0x50 比對，相符才採用。
+* App 實作（✅ 使用者那台）：關鍵幀、影像資料（SHFL 標頭 68 + 延伸區長度 @45 之後）開頭沒有起始碼時，解 128 bytes，解出起始碼才採用。**沒用 CRC**，因為訊框資訊 +0x50／+0x54 對應到 SHFL 延伸區（@68–@111）哪個位置還沒確認。
+* 📖 未處理：一般畫面（P 幀）帶加密旗標的情況。SDK 的條件含「關鍵幀」，理論上 P 幀不會加密，但若遇到某台只有部分 P 幀花掉，先檢查延伸區旗標。
+* 📖 `CombineDataToDevFrame`（0x137510，0x1378fc 也用同一把金鑰）：另一條組訊框的路徑，推測是回放或分段訊框；使用者那台回放實測正常，暫不需要。
+
+### 聲音
+* 📖 SDK 的訊框解密路徑同時處理聲音訊框，是否加密由同一組旗標決定。使用者那台未測試聲音。若加密韌體的聲音變成雜音，先比對延伸區旗標，再試同一把金鑰解前 128 bytes（G.711 沒有起始碼，只能靠 CRC 判斷有沒有解對）。
+
+### XML 指令（私有協定 0x91B）
+* 📖 `SendXmlData`（0x101410）：`0xa15` 非 0 時，XML 內容用 `CDataEncryption::EncryptCmdData`（0x2337d0）加密，帳號欄用 `ProcessBuf` 混淆；`0xa15 == 2` 另有分支（0x10153a）。回覆用 `DecryptCmdData`（0x233830）。App 目前所有查詢都走網頁 HTTP API，沒用到私有協定 XML，所以不影響。
+
+### 回覆類型
+* 加密韌體回覆 cmd 低位元組為 0x0A（一般 0x06），✅ App 已統一處理。
+
+### 其他機種（SDK 中完全不同的協定，App 不支援）
+* `CDVRNetDevice_V3`：早期 TVT DVR（非 NVMS-9000）。
+* `CIPCNetDevice_V3`：TVT IP 攝影機直連，有 `EncryptLoginInfo`（0x1e6af0）。
+* 區網搜尋 `CDiscoverDevice`（`SearchDev` 0x18d250、`OnReceiveCall` 0x18cfb0）✅ 已實作。
+
+### 遇到新機種時的診斷流程
+1. `dvrcli <host> <port> <user> survey` 看韌體版本；`curl /js/lib/websocket.cmd.js` 判斷是否支援 WebSocket。
+2. 不登入、只讀私有協定 `head`（看 @0x2A、@0x2C、@0x34）。
+3. 用**不存在的帳號**送登入，確認封包格式與回覆類型（不影響真帳號的鎖定次數）。
+4. `dvrcli … privdump 1 --service-port P`：看訊框起始碼位置與解碼結果；`privkey` 試金鑰與資料位置。
+5. 公司區網的設備經 MacBook Air SSH 轉接（見使用者記憶，不寫進 repo）。
