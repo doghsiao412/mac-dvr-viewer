@@ -653,10 +653,25 @@ final class AppStore {
 
     // MARK: - 截圖
 
-    static var snapshotFolder: URL {
-        let dir = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
+    /// 使用者自選的截圖資料夾（設定頁「選擇…」；空字串＝預設）
+    static let snapshotFolderKey = "snapshotFolderPath"
+
+    static var defaultSnapshotFolder: URL {
+        FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
             .appending(path: "DVR Viewer", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+
+    /// 截圖資料夾：自選的資料夾存在（例如外接硬碟有接上）就用它，否則用預設的「圖片／DVR Viewer」
+    static var snapshotFolder: URL {
+        let fm = FileManager.default
+        if let p = UserDefaults.standard.string(forKey: snapshotFolderKey), !p.isEmpty {
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue, fm.isWritableFile(atPath: p) {
+                return URL(fileURLWithPath: p, isDirectory: true)
+            }
+        }
+        let dir = defaultSnapshotFolder
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
 

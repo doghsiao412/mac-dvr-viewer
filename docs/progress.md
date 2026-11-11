@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.6.2 已發佈（build 43）**：截圖儲存位置可自選（UserDefaults `snapshotFolderPath`；資料夾不存在或不可寫時退回「圖片／DVR Viewer」並在設定頁提示）。
+
 * **iPhone 自動重裝（2026-11-08）**：`tools/iphone-autoinstall.sh` ＋ launchd `~/Library/LaunchAgents/local.dvrviewer.phone-autoinstall.plist`（每 30 分鐘）。上次成功安裝滿 5 天、iPhone 在線且解鎖時，用已提交版本（git archive HEAD）編譯並以 devicectl 安裝，成功／編譯失敗發通知。iPhone UDID 存在本機 `~/Library/Application Support/DVRViewerPhoneAuto/device-id`，不進 repo。紀錄 `~/Library/Logs/DVRViewerPhoneAuto.log`。
 
 * **iPhone 版跟上 1.6（2026-11-08，已裝到使用者 iPhone）**：共用 DVRKit 已含舊韌體 nonce 登入、私有協定加密登入與關鍵幀解密、登入剩餘次數；`PTZPad.swift` 移到 `mac/Shared/`（iOS 按鍵 50 pt），單頻道頁右上角雲台按鈕開半高工作表。iPhone 編譯通過（未簽章）；無模擬器，畫面未驗證。區網搜尋 iPhone 不做（多播權限）。

@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppStore.self) private var store
     @ObservedObject var updater: UpdaterModel
+    @AppStorage(AppStore.snapshotFolderKey) private var snapshotFolderPath = ""
 
     var body: some View {
         @Bindable var store = store
@@ -76,12 +77,28 @@ struct SettingsView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Section("截圖") {
+                Section {
                     LabeledContent("儲存位置") {
-                        Text(AppStore.snapshotFolder.path(percentEncoded: false))
+                        Text(snapshotPathText)
                             .textSelection(.enabled)
+                            .lineLimit(1).truncationMode(.middle)
+                            .help(AppStore.snapshotFolder.path(percentEncoded: false))
                     }
-                    Button("在 Finder 中顯示") { NSWorkspace.shared.open(AppStore.snapshotFolder) }
+                    HStack {
+                        Button("選擇…") { chooseSnapshotFolder() }
+                        Button("在 Finder 中顯示") { NSWorkspace.shared.open(AppStore.snapshotFolder) }
+                        if !snapshotFolderPath.isEmpty {
+                            Spacer()
+                            Button("還原預設") { snapshotFolderPath = "" }
+                        }
+                    }
+                } header: {
+                    Text("截圖")
+                } footer: {
+                    if snapshotFolderMissing {
+                        Text("找不到自選的資料夾（外接硬碟可能沒接上），目前存到預設位置「圖片／DVR Viewer」。")
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             .formStyle(.grouped)
@@ -102,5 +119,36 @@ struct SettingsView: View {
             .tabItem { Label("關於", systemImage: "info.circle") }
         }
         .frame(width: 560, height: 560)
+    }
+
+    // MARK: - 截圖資料夾
+
+    /// 顯示用路徑（家目錄縮寫成 ~）
+    private var snapshotPathText: String {
+        _ = snapshotFolderPath   // 選擇或還原後重新整理
+        let p = AppStore.snapshotFolder.path(percentEncoded: false)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        return p.hasPrefix(home) ? "~/" + p.dropFirst(home.count).drop(while: { $0 == "/" }) : p
+    }
+
+    private var snapshotFolderMissing: Bool {
+        !snapshotFolderPath.isEmpty && AppStore.snapshotFolder.path(percentEncoded: false) != URL(fileURLWithPath: snapshotFolderPath, isDirectory: true).path(percentEncoded: false)
+    }
+
+    private func chooseSnapshotFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "選擇"
+        panel.message = "選擇截圖要存放的資料夾"
+        panel.directoryURL = AppStore.snapshotFolder
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if FileManager.default.isWritableFile(atPath: url.path(percentEncoded: false)) {
+            snapshotFolderPath = url.path(percentEncoded: false)
+        } else {
+            store.showToast("無法寫入這個資料夾，請選擇其他位置")
+        }
     }
 }
