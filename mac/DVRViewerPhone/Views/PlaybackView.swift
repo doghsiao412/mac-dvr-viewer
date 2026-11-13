@@ -167,7 +167,7 @@ struct PlaybackView: View {
 
     private var video: some View {
         ZStack {
-            VideoSurface(renderer: controller.renderer)
+            ZoomableVideo(renderer: controller.renderer)
             overlay
         }
     }

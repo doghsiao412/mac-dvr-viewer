@@ -109,7 +109,8 @@ struct LiveView: View {
 
     private var video: some View {
         ZStack {
-            VideoSurface(renderer: controller.renderer)
+            ZoomableVideo(renderer: controller.renderer)
+                .id(channelID)   // 切換頻道時還原縮放
             overlay
         }
     }
