@@ -44,8 +44,19 @@ public actor NVMSStream {
     public func connect(timeout: Duration = .seconds(10)) async throws {
         task.resume()
         let deadline = ContinuousClock.now + timeout
+        // DVR 接受連線卻不回應時 receive() 會一直等：時間到就中斷 socket
+        let t = task
+        let timer = Task {
+            try? await Task.sleep(for: timeout)
+            if !Task.isCancelled { t.cancel(with: .goingAway, reason: nil) }
+        }
+        defer { timer.cancel() }
         while ContinuousClock.now < deadline {
-            let msg = try await task.receive()
+            let msg: URLSessionWebSocketTask.Message
+            do { msg = try await task.receive() } catch {
+                if ContinuousClock.now >= deadline { throw NVMSError.transport("WebSocket 建立逾時") }
+                throw error
+            }
             if case .string(let s) = msg, let obj = Self.parseJSON(Data(s.utf8)) {
                 let url = obj["url"] as? String ?? ""
                 let code = (obj["data"] as? [String: Any])?["code"] as? Int

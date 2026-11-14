@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **1.6.3 已發佈（build 44）— 程式審查修正（2026-11-15）**：密碼錯誤停止自動重試（`credentialsRejected`／`passwordRejected`）、`reqLogin` 逾時不送密碼、重新登入以連線物件協調、私有協定同頻道共用串流（`LiveKey` 頻道＋類型）、同步移除保留鑰匙圈密碼。新增 `dvrcli sharetest`、`logintest`（只能對本機假 DVR）。第二批（第 6–10 項）：同步檔背景讀取、連線失敗關閉連線、`State.undecodable` 無法解碼提示、私有協定登入被拒第二次即停止、WebSocket 建立逾時、訊息長度上限、`channelOrder` 重複不當掉。驗證見 `docs/test-results.md` 最後一節。
+
 * ✅ **iPhone 雙指放大畫面（2026-11-13，使用者在 iPhone 確認操作順手）**：`mac/DVRViewerPhone/Views/ZoomableVideo.swift`，單頻道即時與回放頁使用。1–8 倍數位縮放、以手指位置為中心、放大後單指拖曳平移（不出界）、點兩下放大 2.5 倍／還原、左上角倍率按鈕點一下還原；切換頻道時還原。iPhone Duo 模擬器確認捏合、平移、還原；點兩下未能在模擬器測（連點送不出）。
 
 * **1.6.2 已發佈（build 43）**：截圖儲存位置可自選（UserDefaults `snapshotFolderPath`；資料夾不存在或不可寫時退回「圖片／DVR Viewer」並在設定頁提示）。

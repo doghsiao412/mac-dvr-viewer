@@ -12,7 +12,7 @@ import Observation
 final class SyncManager {
     static let fileName = "DVR Viewer 設定.json"
 
-    struct SyncFile: Codable {
+    struct SyncFile: Codable, Sendable {
         var format = 1
         var modifiedAt: Date
         var writer: String
@@ -119,8 +119,10 @@ final class SyncManager {
     }
 
     func syncNow() {
-        checkRemote()
-        write(force: false)
+        Task {
+            await checkRemote()
+            write(force: false)
+        }
     }
 
     private func write(force: Bool) {
@@ -161,20 +163,27 @@ final class SyncManager {
         pollTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             while !Task.isCancelled {
-                self?.checkRemote()
+                await self?.checkRemote()
                 try? await Task.sleep(for: .seconds(5))
             }
         }
     }
 
-    /// 其他 Mac 寫入了較新的同步檔 → 套用
-    private func checkRemote() {
-        guard let file = fileURL, !applying else { return }
-        guard let remote = Self.read(file) else { return }
+    /// 其他 Mac 寫入了較新的同步檔 → 套用。
+    /// 讀檔放在背景：雲端硬碟很慢、或 iCloud 檔案還沒下載時，檔案協調會等很久，不能卡住畫面。
+    private func checkRemote() async {
+        guard let file = fileURL, !applying, !checking else { return }
+        checking = true
+        let remote = await Task.detached(priority: .utility) { Self.read(file) }.value
+        checking = false
+        // 等待期間使用者可能換了資料夾或停止同步
+        guard let remote, fileURL == file, !applying else { return }
         if remote.modifiedAt > (lastApplied ?? .distantPast), remote.writer != machineID {
             apply(remote)
         }
     }
+
+    private var checking = false
 
     private func apply(_ remote: SyncFile) {
         guard let store else { return }

@@ -12,6 +12,8 @@ public final class LiveStreamPlayer: @unchecked Sendable {
         case connecting
         case playing
         case reconnecting(String)
+        /// 有收到影像資料，但一直解不出畫面（不支援的編碼、或韌體把影像加密了）
+        case undecodable(String)
         case stopped
     }
 
@@ -117,6 +119,8 @@ public final class LiveStreamPlayer: @unchecked Sendable {
                 let decoder = VideoDecoder()
                 defer { decoder.invalidate() }
                 var playing = false
+                var firstVideoAt: ContinuousClock.Instant?
+                var warned = false
                 for try await payload in ms.frames {
                     if Task.isCancelled { break }
                     guard let frame = SHFLFrame.parse(payload) else { continue }
@@ -127,9 +131,14 @@ public final class LiveStreamPlayer: @unchecked Sendable {
                     }
                     if isAudioEnabled, ms.audioUnsupported() { lock.withLock { _audio = false }; onAudioUnsupported?() }
                     let pts = CMTime(value: Int64(frame.fileTime / 10), timescale: 1_000_000)
+                    if firstVideoAt == nil { firstVideoAt = .now }
                     if let out = try? decoder.decode(annexB: frame.videoData, pts: pts) {
                         if !playing { playing = true; backoff = 1; emit(.playing) }
                         onFrame?(out.pixelBuffer, frame.captureTime)
+                    } else if !playing, !warned, let t = firstVideoAt, ContinuousClock.now - t > .seconds(10) {
+                        // 持續有資料卻 10 秒都沒有畫面：告訴使用者不是網路問題（之後若解得出來會照常顯示）
+                        warned = true
+                        emit(.undecodable(Self.undecodableMessage))
                     }
                 }
                 await ms.close()
@@ -146,6 +155,8 @@ public final class LiveStreamPlayer: @unchecked Sendable {
         }
         emit(.stopped)
     }
+
+    public static let undecodableMessage = "有收到影像資料，但無法解碼（可能是這台 DVR 的編碼或加密方式尚未支援）"
 
     static func describe(_ e: Error) -> String {
         if let n = e as? NVMSError { return n.description }

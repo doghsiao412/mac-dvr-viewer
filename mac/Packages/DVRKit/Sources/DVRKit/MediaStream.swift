@@ -30,8 +30,14 @@ extension MediaStream {
     static func webSocket(host: String, port: Int, sessionId: String, live: Bool,
                           open: @escaping @Sendable (NVMSStream) async throws -> Void) async throws -> MediaStream {
         let ws = NVMSStream(host: host, port: port, sessionId: sessionId)
-        try await ws.connect()
-        try await open(ws)
+        do {
+            try await ws.connect()
+            try await open(ws)
+        } catch {
+            // 失敗也要關閉：否則 URLSession 不會釋放，socket 也可能留在 DVR 上佔 WebSocket 名額
+            await ws.close(kind: live ? .live : .playback)
+            throw error
+        }
         let (stream, cont) = AsyncThrowingStream<Data, Error>.makeStream(bufferingPolicy: live ? .bufferingNewest(240) : .unbounded)
         let noAudio = FlagBox()
         let reader = Task {

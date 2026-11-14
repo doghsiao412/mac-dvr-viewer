@@ -120,7 +120,7 @@ struct ChannelGridView: View {
             } description: {
                 Text(e)
             } actions: {
-                Button("重新連線") { device.reconnect() }
+                Button("重新連線") { device.reconnect(retryLogin: true) }
             }
         default:
             ProgressView("連線中…")
@@ -212,6 +212,9 @@ private struct GridTile: View {
                 Label("影像服務 Port 設定錯誤", systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2).foregroundStyle(.yellow).multilineTextAlignment(.center).padding(4)
             case .reconnecting: ProgressView().tint(.white.opacity(0.7))
+            case .undecodable:
+                Label("無法解碼", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption2).foregroundStyle(.yellow)
             case .idle, .connecting: ProgressView().tint(.white.opacity(0.7))
             }
         }

@@ -134,8 +134,17 @@ public actor NVMSClient {
         token = nil
         altSessionId = nil
         // 1. 支援 reqLogin 的韌體：取 nonce／token／sessionId，密碼送雜湊；不支援（回失敗）就用 Base64
+        //    只有 DVR 明確回答「不支援」（回失敗狀態，或 HTTP 404 之類）才用 Base64。
+        //    逾時、連不上、回應無法解析時直接丟出錯誤、不送密碼：否則需要驗證碼的韌體
+        //    會把 Base64 密碼當成密碼錯誤，白白用掉一次嘗試次數（DVR 預設 5 次就鎖帳號）。
         var pw = Data(password.utf8).base64EncodedString()
-        if let r = try? await call("reqLogin", body: Self.request("<token>null</token>")),
+        var reqReply: DVRXMLElement?
+        do {
+            reqReply = try await post("reqLogin", body: Self.request("<token>null</token>"))
+        } catch NVMSError.http {
+            reqReply = nil
+        }
+        if let r = reqReply, r.text("status") == "success",
            let nonce = r.text("content/nonce"), !nonce.isEmpty,
            let tk = r.text("content/token"), !tk.isEmpty {
             token = tk
@@ -365,6 +374,12 @@ public enum NVMSError: Error, CustomStringConvertible {
     case device(command: String, code: Int)
     /// 登入被拒（remaining：DVR 回報的剩餘嘗試次數）
     case loginFailed(code: Int, remaining: Int?, locked: Bool)
+
+    /// 帳號或密碼錯誤（再試只會消耗 DVR 的嘗試次數，應停止自動重試）
+    public var isWrongCredentials: Bool {
+        if case .loginFailed(let code, _, let locked) = self { return !locked && [536_870_947, 536_870_948].contains(code) }
+        return false
+    }
 
     public var description: String {
         switch self {

@@ -73,4 +73,18 @@ struct PrivateLoginTests {
         #expect(TVTPrivateClient.decryptKeyframe(encryptedFrame, key: Data(count: 16)) == encryptedFrame)
         plain.removeAll()
     }
+
+    @Test func liveFramesRoutedByChannelAndType() {
+        typealias K = TVTPrivateClient.LiveKey
+        let keys = [K(ch: 1, type: 2), K(ch: 1, type: 1), K(ch: 2, type: 2)]
+        // 影像：只給同頻道、同類型
+        #expect(TVTPrivateClient.liveTargets(ch: 1, type: 2, keys: keys, typeConfirmed: false).keys == [K(ch: 1, type: 2)])
+        #expect(TVTPrivateClient.liveTargets(ch: 1, type: 1, keys: keys, typeConfirmed: false).matched)
+        // 聲音（類型 6）：該頻道全部
+        #expect(Set(TVTPrivateClient.liveTargets(ch: 1, type: 6, keys: keys, typeConfirmed: true).keys) == [K(ch: 1, type: 1), K(ch: 1, type: 2)])
+        // 類型對不上：未確認過的 DVR 給該頻道全部（備援）；確認過的丟棄（剛關閉那條的殘餘訊框）
+        #expect(TVTPrivateClient.liveTargets(ch: 2, type: 1, keys: keys, typeConfirmed: false).keys == [K(ch: 2, type: 2)])
+        #expect(TVTPrivateClient.liveTargets(ch: 2, type: 1, keys: keys, typeConfirmed: true).keys.isEmpty)
+        #expect(TVTPrivateClient.liveTargets(ch: 9, type: 2, keys: keys, typeConfirmed: false).keys.isEmpty)
+    }
 }

@@ -1096,6 +1096,74 @@ func run() async -> Int32 {
         await conn.disconnect()
         return 0
     }
+    if cmd == "logintest" {
+        // logintest latch｜race：配合本機假 DVR 驗證登入邏輯（不要對真的 DVR 用，latch 會故意送錯密碼）
+        guard host == "127.0.0.1" else { print("logintest 只能對本機假 DVR 執行"); return 1 }
+        let conn = DVRConnection(host: host, port: port, username: user) { try devPassword(user: user, host: host) }
+        if rest.first == "latch" {
+            for i in 1...4 {
+                do { _ = try await conn.connect(); print("   第 \(i) 次：登入成功") }
+                catch { print("   第 \(i) 次：\(error)") }
+            }
+            print("   credentialsRejected = \(await conn.credentialsRejected != nil)")
+        } else {
+            do {
+                _ = try await conn.connect()
+                _ = try? await URLSession.shared.data(from: URL(string: "http://\(host):\(port)/__expire")!)
+                let ok = await withTaskGroup(of: Bool.self) { g -> Int in
+                    for _ in 0..<12 { g.addTask { (try? await conn.onlineChannelIds()) != nil } }
+                    var n = 0; for await r in g where r { n += 1 }; return n
+                }
+                print("   Session 失效後同時 12 個查詢：成功 \(ok)／12")
+            } catch { print("   ✖ \(error)") }
+        }
+        if let (d, _) = try? await URLSession.shared.data(from: URL(string: "http://\(host):\(port)/__stats")!) {
+            print("   假 DVR 統計：\(String(decoding: d, as: UTF8.self))")
+        }
+        return 0
+    }
+    if cmd == "sharetest" {
+        // sharetest [頻道]：強制私有協定，同一頻道同時開 子串流×2＋主串流×1，確認三個接收端都有畫面、
+        // 主／子不混在一起；關掉其中一個子串流後，另一個要繼續有畫面（以前會互踢）
+        let conn = DVRConnection(host: host, port: port, username: user, servicePort: args.int("service-port", 6036), autoDetectServicePort: args.flags["service-port"] == nil) { try devPassword(user: user, host: host) }
+        await conn.setForcePrivateProtocol(true)
+        final class Tally: @unchecked Sendable {
+            let lock = NSLock(); var n = 0, main = 0, sub = 0, decoded = 0
+            func add(_ d: Data, ok: Bool) { lock.withLock { n += 1; if d.count > 6 { if d[d.startIndex + 6] == 1 { main += 1 } else if d[d.startIndex + 6] == 2 { sub += 1 } }; if ok { decoded += 1 } } }
+            func snap() -> (Int, Int, Int, Int) { lock.withLock { (n, main, sub, decoded) } }
+        }
+        do {
+            let chls = try await conn.connect()
+            let n = max(1, min(Int(rest.first ?? "1") ?? 1, chls.count))
+            let id = chls[n - 1].id
+            func start(_ main: Bool) async throws -> (MediaStream, Tally, Task<Void, Never>) {
+                let ms = try await conn.openLive(channelId: id, mainStream: main)
+                let t = Tally()
+                let task = Task {
+                    let dec = VideoDecoder()
+                    do { for try await f in ms.frames {
+                        guard let fr = SHFLFrame.parse(f), !fr.isAudio else { continue }
+                        let pts = CMTime(value: Int64(fr.fileTime / 10), timescale: 1_000_000)
+                        t.add(f, ok: (try? dec.decode(annexB: fr.videoData, pts: pts)) != nil)
+                    } } catch {}
+                    dec.invalidate()
+                }
+                return (ms, t, task)
+            }
+            let a = try await start(false), b = try await start(false), c = try await start(true)
+            try await Task.sleep(for: .seconds(6))
+            func show(_ name: String, _ t: Tally) { let s = t.snap(); print("   \(name)：收到 \(s.0)（主 \(s.1)／子 \(s.2)），解碼 \(s.3)") }
+            print("■ 同時開 6 秒："); show("子串流 A", a.1); show("子串流 B", b.1); show("主串流 C", c.1)
+            await a.0.close()
+            let before = b.1.snap().0, beforeC = c.1.snap().0
+            try await Task.sleep(for: .seconds(4))
+            print("■ 關掉 A 之後 4 秒：B 多收到 \(b.1.snap().0 - before)、C 多收到 \(c.1.snap().0 - beforeC)（都應該 > 0）")
+            await b.0.close(); await c.0.close()
+            a.2.cancel(); b.2.cancel(); c.2.cancel()
+        } catch { print("✖ \(error)"); await conn.disconnect(); return 1 }
+        await conn.disconnect()
+        return 0
+    }
     if cmd == "privkey" {
         // privkey [頻道]：診斷加密關鍵幀。用登入回覆中候選位置的 16 bytes 當 AES-128 金鑰，
         // 試解關鍵幀不同位置的 128 bytes，只印「解完是否出現起始碼」；不印金鑰、不存影像
@@ -1164,7 +1232,7 @@ func run() async -> Int32 {
             let chls = try await conn.connect()
             print("■ 已登入網頁 API，頻道 \(chls.count)，影像走 \(await conn.usesPrivateProtocol ? "私有協定" : "WebSocket")，影像服務 Port \(await conn.servicePort)")
             let n = max(1, min(Int(rest.first ?? "1") ?? 1, chls.count))
-            let ms = try await conn.openLive(channelId: chls[n - 1].id, mainStream: false)
+            let ms = try await conn.openLive(channelId: chls[n - 1].id, mainStream: args.bool("main"))
             print("■ 已開啟頻道 \(n) 即時串流（\(ms.transport)）")
             let decoder = VideoDecoder()
             var count = 0, bytes = 0, decoded = 0, shown = 0

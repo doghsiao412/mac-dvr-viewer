@@ -4,12 +4,20 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.6.2</title>
-      <pubDate>Wed, 11 Nov 2026 06:08:51 GMT</pubDate>
-      <sparkle:version>43</sparkle:version>
-      <sparkle:shortVersionString>1.6.2</sparkle:shortVersionString>
+      <title>DVR Viewer 1.6.3</title>
+      <pubDate>Sat, 14 Nov 2026 19:14:36 GMT</pubDate>
+      <sparkle:version>44</sparkle:version>
+      <sparkle:shortVersionString>1.6.3</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.6.2
+      <description sparkle:format="markdown"><![CDATA[v1.6.3
+
+- 密碼錯誤時不再一直自動重試：DVR 回報帳號或密碼錯誤後會停止重試並提示重新輸入密碼，避免把 DVR 帳號鎖住。DVR 忙碌時也不會誤送登入而消耗嘗試次數。
+- 同一支攝影機可以同時在主畫面、獨立視窗與放大畫面播放，不再互相中斷。
+- 有收到影像資料卻無法顯示時，畫面會顯示原因，不再只是一直轉圈。
+- 同步資料夾：其他 Mac 移除 DVR 時，不再刪除這台 Mac 鑰匙圈裡的密碼；檢查同步檔時不再讓介面卡頓。
+- 改善連線穩定性：登入過期時多個畫面只會重新登入一次，連線失敗時會確實關閉連線，收到異常資料時能自動恢復。
+
+v1.6.2
 
 - 截圖的儲存位置可以自己選：在設定的「截圖」按「選擇…」挑資料夾，按「還原預設」回到「圖片／DVR Viewer」。選的是外接硬碟、而硬碟沒接上時，會先存到預設位置。
 
@@ -210,11 +218,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.6.2/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.6.2/DVR-Viewer-1.6.2.dmg" sparkle:edSignature="8InT+0JnjgYzmvgQFJxGFVJVSzz1N42r9gZG4UpsC30KUAvO4lOY1shSDrGlZbxfVE3FmNm6RNvueurjmHQUDA==" length="3134423" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.6.3/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.6.3/DVR-Viewer-1.6.3.dmg" sparkle:edSignature="fC28BSCjtLzcVS3AO1RiJEYtwhqLtaInsn8kKQCbDmO4n7ZiM7wXDpO94PrgXvLN1EIEUCaol72UBzgHU+LiAw==" length="3158289" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: pk0uxc5xZs4cVBFnJZ6aF1rYBxIsKNXqwKWgK6aPaixdluFH0TccCTgflQVrFRRlvTD6ACmT8dAhtSMyvll8Bw==
-length: 13784
+edSignature: tnwpR3MHFHXe72PennvOWw+KKkXTACKpZUIRMFdJM/6XhlIHuYIZK8+II3pBknkcuih09e+66zVeorXNMs1XCw==
+length: 14502
 -->

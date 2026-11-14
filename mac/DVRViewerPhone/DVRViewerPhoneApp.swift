@@ -65,7 +65,7 @@ final class PhoneStore {
         if let password, !password.isEmpty {
             try KeychainStore.setPassword(password, for: config.id)
             m.apply(config)
-            m.reconnect()
+            m.reconnect(retryLogin: true)
         } else {
             m.apply(config)
         }

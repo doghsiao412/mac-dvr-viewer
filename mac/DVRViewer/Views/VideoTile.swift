@@ -85,6 +85,15 @@ struct VideoTile: View {
                 }
                 .padding(10)
                 .glassEffect(.regular, in: .rect(cornerRadius: 14))
+            case .undecodable(let why):
+                VStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                    Text("無法顯示畫面").font(.caption)
+                    Text(why).font(.caption2).lineLimit(3).multilineTextAlignment(.center)
+                }
+                .padding(10)
+                .frame(maxWidth: 260)
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
             case .playing:
                 EmptyView()
             }

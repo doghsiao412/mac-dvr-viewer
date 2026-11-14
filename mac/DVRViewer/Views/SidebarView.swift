@@ -78,7 +78,7 @@ struct SidebarView: View {
         .contextMenu {
             Button("編輯…") { editor = .edit(dev.config) }
             Button("編輯 DVR 順序…") { store.editingDeviceOrder = true }
-            Button("重新連線") { dev.reconnect() }
+            Button("重新連線") { dev.reconnect(retryLogin: true) }
             Divider()
             Button("全部收合") { store.setAllExpanded(false) }
             Button("全部展開") { store.setAllExpanded(true) }

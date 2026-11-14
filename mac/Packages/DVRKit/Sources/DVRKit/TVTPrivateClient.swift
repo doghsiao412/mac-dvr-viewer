@@ -15,7 +15,7 @@ import Network
 ///   "1111" + len 0 → 心跳
 /// 路由區塊： GUID 請求 | GUID session | GUID 目標（頻道或設備）| u32 2 | GUID 任務 | u32 op
 /// ```
-/// 安全性：登入密碼以明文傳送（設備宣告 loginEncrypt=0）。
+/// 安全性：DVR 連線後的 "head" 沒有加密旗標時，登入密碼以明文傳送；有旗標時送雜湊（見 loginPayload）。
 public actor TVTPrivateClient {
     public nonisolated let host: String
     public nonisolated let port: Int
@@ -28,7 +28,7 @@ public actor TVTPrivateClient {
 
         public var description: String {
             switch self {
-            case .loginFailed(let c): return "私有協定登入失敗（\(String(format: "0x%08X", c))）：帳號或密碼錯誤、或帳號無遠端權限；為避免帳號被鎖，5 分鐘內不再重試"
+            case .loginFailed(let c): return "私有協定登入失敗（\(String(format: "0x%08X", c))）：帳號或密碼錯誤、或帳號無遠端權限；為避免帳號被鎖已暫停重試，確認後請按「重新連線」"
             case .timeout(let s): return "私有協定逾時：\(s)"
             case .disconnected: return "私有協定連線已中斷"
             case .badReply(let s): return "私有協定回覆無法解析：\(s)"
@@ -47,9 +47,22 @@ public actor TVTPrivateClient {
     private var fragments: [UInt32: Data] = [:]
     private var nextId: UInt32 = 0
     private var pending: [UInt32: CheckedContinuation<Reply, Error>] = [:]
-    /// 即時影像接收端，以頻道序號（SHFL offset 8，1 起）區分；同一頻道只送給最新開啟的任務。
-    /// 記下任務 GUID：舊任務關閉時（例如放大畫面時分割畫面那格關閉）不可把新任務的接收端一起關掉。
-    private var liveSinks: [UInt32: (task: Data, cont: AsyncThrowingStream<Data, Error>.Continuation)] = [:]
+    /// 即時影像：以「頻道序號（SHFL offset 8，1 起）＋串流類型（SHFL offset 6：1 主、2 子）」為單位，
+    /// 每個單位只向 DVR 開一個任務，多個畫面（分割畫面、獨立視窗、放大）共用同一條串流。
+    /// 以前同頻道只送給最新開啟的那一個，舊的會被結束而不斷重連（兩邊互踢）。
+    struct LiveKey: Hashable { let ch: UInt32; let type: UInt8 }
+    private struct LiveEntry {
+        let task: Data
+        var consumers: [Data: AsyncThrowingStream<Data, Error>.Continuation] = [:]
+        /// 向 DVR 開啟中（尚未收到回覆）
+        var opening: Task<Void, Error>?
+    }
+    private var liveEntries: [LiveKey: LiveEntry] = [:]
+    private var liveConsumers: [Data: LiveKey] = [:]
+    /// 已確認這台 DVR 的訊框類型位元組與開啟的串流類型對得上（之後不再用「送給同頻道全部」的備援）
+    private var liveTypeConfirmed = false
+    /// 即時聲音：同頻道共用一個聲音任務（否則聲音訊框會重複）
+    private var liveAudio: [UInt32: (task: Data, refs: Int)] = [:]
     private var taskSinks: [Data: AsyncThrowingStream<Data, Error>.Continuation] = [:]    // 回放任務 GUID
     private var readerTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
@@ -89,7 +102,13 @@ public actor TVTPrivateClient {
         for _ in 0..<30 where greeting == nil { try? await Task.sleep(for: .milliseconds(100)) }
         usedEncryptedLogin = greeting.map { Self.encryptFlag($0) != 0 } ?? false
         let p = Self.loginPayload(user: user, password: password, greeting: greeting, random: UInt32.random(in: 0..<10_000_000))
-        let reply = try await request(cmd: 0x0100_0003, sub: 0x101, payload: p, timeout: .seconds(10))
+        let reply: Reply
+        do {
+            reply = try await request(cmd: 0x0100_0003, sub: 0x101, payload: p, timeout: .seconds(10))
+        } catch {
+            disconnect()   // 登入逾時等：關閉這條 TCP，不要留在 DVR 上佔連線名額
+            throw error
+        }
         guard reply.sub == 0x1000_0101, reply.data.count >= 100 else {
             let code = reply.data.count >= 4 ? reply.data.u32le(at: 0) : reply.sub
             disconnect()
@@ -181,9 +200,10 @@ public actor TVTPrivateClient {
         link?.cancel(); link = nil
         for (_, c) in pending { c.resume(throwing: ClientError.disconnected) }
         pending = [:]
-        for (_, s) in liveSinks { s.cont.finish(throwing: ClientError.disconnected) }
+        for (_, e) in liveEntries { for c in e.consumers.values { c.finish(throwing: ClientError.disconnected) } }
         for (_, s) in taskSinks { s.finish(throwing: ClientError.disconnected) }
-        liveSinks = [:]; taskSinks = [:]
+        liveEntries = [:]; liveConsumers = [:]; liveAudio = [:]; taskSinks = [:]
+        liveTypeConfirmed = false
     }
 
     // MARK: - XML 查詢（與 HTTP API 相同的 NVMS-9000 指令）
@@ -202,42 +222,108 @@ public actor TVTPrivateClient {
 
     // MARK: - 即時影像
 
-    /// 開啟即時串流。channelGUID 例："{00000001-0000-0000-0000-000000000000}"；chNo 從 0 起；streamType 1 主 / 2 子
+    /// 開啟即時串流。channelGUID 例："{00000001-0000-0000-0000-000000000000}"；chNo 從 0 起；streamType 1 主 / 2 子。
+    /// 回傳的 task 是這個接收端的代號（關閉時帶回）；同頻道同類型已有串流時直接共用，不再向 DVR 開新任務。
     public func openLive(channelGUID: String, chNo: Int, streamType: Int, audio: Bool = false) async throws -> (task: Data, frames: AsyncThrowingStream<Data, Error>) {
         guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { throw ClientError.disconnected }
-        let task = TVTGUID.random()
+        let key = LiveKey(ch: UInt32(chNo + 1), type: UInt8(clamping: streamType))
+        let consumer = TVTGUID.random()
         let (stream, cont) = AsyncThrowingStream<Data, Error>.makeStream(bufferingPolicy: .bufferingNewest(240))
-        let key = UInt32(chNo + 1)
-        liveSinks[key]?.cont.finish()
-        liveSinks[key] = (task, cont)
+
+        if var e = liveEntries[key] {
+            // 共用既有串流（要等下一個關鍵幀才有畫面）
+            e.consumers[consumer] = cont
+            liveEntries[key] = e
+            liveConsumers[consumer] = key
+            if let opening = e.opening {
+                do { try await opening.value } catch {
+                    removeConsumer(consumer)
+                    throw error
+                }
+            }
+            return (consumer, stream)
+        }
+
+        let task = TVTGUID.random()
         let xml = "<?xml version='1.0' encoding='utf-8'?><request version='1.0' systemType='NVMS-9000' clientType='SYS'>"
             + "<destId>\(channelGUID)</destId><taskId>\(TVTGUID.string(task))</taskId><chNo>\(chNo)</chNo>"
             + "<audio>\(audio ? 1 : 0)</audio><streamType>\(streamType)</streamType></request>"
+        let opening = Task { _ = try await self.routed(sub: 0x505, dest: dest, task: task, op: 1, payload: Data(xml.utf8)) }
+        liveEntries[key] = LiveEntry(task: task, consumers: [consumer: cont], opening: opening)
+        liveConsumers[consumer] = key
         do {
-            _ = try await routed(sub: 0x505, dest: dest, task: task, op: 1, payload: Data(xml.utf8))
+            try await opening.value
         } catch {
-            if liveSinks[key]?.task == task { liveSinks[key] = nil }
-            cont.finish(throwing: error)
+            // 開啟失敗：這個任務的所有接收端一起結束
+            if let e = liveEntries[key], e.task == task {
+                for (id, c) in e.consumers { c.finish(throwing: error); liveConsumers[id] = nil }
+                liveEntries[key] = nil
+            }
             throw error
         }
-        return (task, stream)
+        if liveEntries[key]?.task == task {
+            liveEntries[key]?.opening = nil
+        } else {
+            // 等待回覆期間所有接收端都離開了：把剛開好的任務關掉
+            await sendLiveClose(dest: dest, chNo: chNo, task: task)
+            throw ClientError.disconnected
+        }
+        return (consumer, stream)
     }
 
-    public func closeLive(channelGUID: String, chNo: Int, task: Data) async {
-        let key = UInt32(chNo + 1)
-        if let s = liveSinks[key], s.task == task {
-            s.cont.finish(); liveSinks[key] = nil
+    /// 關閉一個接收端；最後一個離開時才向 DVR 關閉任務
+    public func closeLive(channelGUID: String, chNo: Int, task consumer: Data) async {
+        guard let last = removeConsumer(consumer) else { return }
+        // 還在開啟中：由 openLive 收到回覆後負責關閉
+        guard !last.wasOpening, isConnected, let dest = TVTGUID.bytes(channelGUID) else { return }
+        await sendLiveClose(dest: dest, chNo: chNo, task: last.task)
+    }
+
+    /// 移除接收端。回傳值非 nil 表示它是最後一個（需要向 DVR 關閉該任務）
+    @discardableResult
+    private func removeConsumer(_ consumer: Data) -> (task: Data, wasOpening: Bool)? {
+        guard let key = liveConsumers.removeValue(forKey: consumer), var e = liveEntries[key] else { return nil }
+        e.consumers.removeValue(forKey: consumer)?.finish()
+        if e.consumers.isEmpty {
+            liveEntries[key] = nil
+            return (e.task, e.opening != nil)
         }
-        guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { return }
+        liveEntries[key] = e
+        return nil
+    }
+
+    private func sendLiveClose(dest: Data, chNo: Int, task: Data) async {
         var p = Data(count: 76)
         p.putU32(UInt32(chNo + 1), at: 0)  // 頻道編號（1 起）
         _ = try? await routed(sub: 0x502, dest: dest, task: task, op: 2, payload: p)
     }
 
+    /// 即時訊框要送給哪些「頻道＋類型」：影像（類型 1 主、2 子）只給對應的那一條；
+    /// 聲音等其他類型給該頻道全部。類型對不上時：尚未確認過對應關係的 DVR 給該頻道全部（備援），
+    /// 已確認過的視為剛關閉那條串流的殘餘訊框，丟棄。
+    static func liveTargets(ch: UInt32, type: UInt8, keys: [LiveKey], typeConfirmed: Bool) -> (keys: [LiveKey], matched: Bool) {
+        if type == 1 || type == 2 {
+            let exact = LiveKey(ch: ch, type: type)
+            if keys.contains(exact) { return ([exact], true) }
+            if typeConfirmed { return ([], false) }
+        }
+        return (keys.filter { $0.ch == ch }, false)
+    }
+
+    private func dispatchLive(_ frame: Data) {
+        let r = Self.liveTargets(ch: frame.u32le(at: 8), type: frame[frame.startIndex + 6],
+                                 keys: Array(liveEntries.keys), typeConfirmed: liveTypeConfirmed)
+        if r.matched { liveTypeConfirmed = true }
+        for k in r.keys {
+            guard let e = liveEntries[k] else { continue }
+            for c in e.consumers.values { c.yield(frame) }
+        }
+    }
+
     // MARK: - 即時聲音（2026-10-31 由 SuperLive Plus 封包分析）
     // 開：0x501 op=1（獨立的聲音任務 GUID）；關：0x502 op=2（同一任務）
     // 內容 76 bytes：u32 頻道編號(1 起) @0、u32 6 @68、u32 3 @72
-    // 聲音訊框與即時影像同樣以 0x6/0x10001 送達（SHFL offset 8 = 頻道），由既有 liveSinks 接收
+    // 聲音訊框與即時影像同樣以 0x6/0x10001 送達（SHFL offset 8 = 頻道），與影像一起分送給該頻道的接收端
 
     private func liveAudioPayload(chNo: Int) -> Data {
         var p = Data(count: 76)
@@ -247,15 +333,30 @@ public actor TVTPrivateClient {
         return p
     }
 
-    /// 開啟即時聲音，回傳聲音任務 GUID
+    /// 開啟即時聲音，回傳聲音任務 GUID（同頻道已開啟時共用同一個任務）
     public func openLiveAudio(channelGUID: String, chNo: Int) async throws -> Data {
         guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { throw ClientError.disconnected }
+        let ch = UInt32(chNo + 1)
+        if let a = liveAudio[ch] {
+            liveAudio[ch] = (a.task, a.refs + 1)
+            return a.task
+        }
         let task = TVTGUID.random()
-        _ = try await routed(sub: 0x501, dest: dest, task: task, op: 1, payload: liveAudioPayload(chNo: chNo))
+        liveAudio[ch] = (task, 1)
+        do {
+            _ = try await routed(sub: 0x501, dest: dest, task: task, op: 1, payload: liveAudioPayload(chNo: chNo))
+        } catch {
+            if liveAudio[ch]?.task == task { liveAudio[ch] = nil }
+            throw error
+        }
         return task
     }
 
     public func closeLiveAudio(channelGUID: String, chNo: Int, task: Data) async {
+        let ch = UInt32(chNo + 1)
+        guard let a = liveAudio[ch], a.task == task else { return }
+        if a.refs > 1 { liveAudio[ch] = (a.task, a.refs - 1); return }
+        liveAudio[ch] = nil
         guard isConnected, let dest = TVTGUID.bytes(channelGUID) else { return }
         _ = try? await routed(sub: 0x502, dest: dest, task: task, op: 2, payload: liveAudioPayload(chNo: chNo))
     }
@@ -402,6 +503,9 @@ public actor TVTPrivateClient {
                 break
             }
             let rawLen = buffer.u32le(at: o - buffer.startIndex + 4)
+            // 長度不合理（影像資料裡剛好出現 "1111" 而失去同步時）：不要等一筆永遠收不完的訊息，
+            // 往後移一個位元組，下一輪會走「失去同步」去找下一個標記
+            if rawLen != 0xFFFF_FFFF, rawLen > Self.maxMessageLength { o += 1; continue }
             if rawLen == 0xFFFF_FFFF {
                 // 分段訊息（> 約 64 KB，例如大的關鍵幀）：
                 // "1111" | FFFFFFFF | u32 id | u32 分段數 | u32 總長 | u32 第幾段(1 起) | u32 本段長度 | u32 0 | 資料
@@ -410,6 +514,7 @@ public actor TVTPrivateClient {
                 let id = buffer.u32le(at: base + 8), count = buffer.u32le(at: base + 12)
                 let total = Int(buffer.u32le(at: base + 16)), index = buffer.u32le(at: base + 20)
                 let fragLen = Int(buffer.u32le(at: base + 24))
+                if fragLen > Int(Self.maxMessageLength) || total > 4 * Int(Self.maxMessageLength) { o += 1; continue }
                 guard buffer.endIndex - o >= 32 + fragLen else { break }
                 var acc = fragments[id] ?? Data()
                 if index == 1 { acc = Data() }
@@ -435,6 +540,9 @@ public actor TVTPrivateClient {
         buffer = buffer.subdata(in: o..<buffer.endIndex)
     }
 
+    /// 單一訊息的長度上限（正常最大是分段前約 64 KB；留很寬的餘裕）
+    static let maxMessageLength: UInt32 = 8 << 20
+
     static let debug = ProcessInfo.processInfo.environment["DVRKIT_DEBUG"] == "1"
 
     /// 支援加密的韌體（"head" @0x2C 非 0）回覆的類型低位元組是 0x0A，其餘是 0x06：統一成 0x06 處理
@@ -448,8 +556,7 @@ public actor TVTPrivateClient {
             pending.removeValue(forKey: id)?.resume(returning: Reply(cmd: cmd, sub: sub, data: data))
         case 0x0000_0006 where sub == 0x0001_0001:
             guard data.count >= 12 else { return }
-            let ch = data.u32le(at: 8)
-            liveSinks[ch]?.cont.yield(frameKey.map { Self.decryptKeyframe(data, key: $0) } ?? data)
+            dispatchLive(frameKey.map { Self.decryptKeyframe(data, key: $0) } ?? data)
         case 0x0002_0006:
             guard data.count >= 72 else { return }
             let task = data.subdata(in: (data.startIndex + 52)..<(data.startIndex + 68))

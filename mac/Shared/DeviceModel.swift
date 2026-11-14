@@ -34,6 +34,8 @@ final class DeviceModel: Identifiable {
     private(set) var webStreaming: Bool?
     /// 這台裝置的鑰匙圈沒有此 DVR 的密碼（例如從其他 Mac 同步過來）
     private(set) var needsPassword = false
+    /// DVR 回報帳號或密碼錯誤：停止自動重試（再試會把帳號鎖住），等使用者重新輸入密碼或手動重新連線
+    private(set) var passwordRejected = false
     private var loop: Task<Void, Never>?
     /// 自動帶入 DVR 設定的影像服務 Port 後呼叫（由 Store 存檔／同步）
     var onConfigChanged: (() -> Void)?
@@ -60,8 +62,9 @@ final class DeviceModel: Identifiable {
     func apply(_ newConfig: DeviceConfig) {
         let needsReconnect = newConfig.host != config.host || newConfig.port != config.port
             || newConfig.username != config.username || newConfig.servicePort != config.servicePort
+        let credentialsChanged = newConfig.host != config.host || newConfig.port != config.port || newConfig.username != config.username
         config = newConfig
-        if needsReconnect { reconnect() }
+        if needsReconnect { reconnect(retryLogin: credentialsChanged) }
     }
 
     func start() {
@@ -77,7 +80,10 @@ final class DeviceModel: Identifiable {
         status = .disconnected
     }
 
-    func reconnect() {
+    /// 重建連線。retryLogin：使用者重新輸入密碼或手動按「重新連線」時為 true，會再試一次登入；
+    /// 自動的重連（例如 iPhone 回到前景）保持 false，密碼被拒後不再送登入。
+    func reconnect(retryLogin: Bool = false) {
+        if retryLogin { passwordRejected = false }
         loop?.cancel()
         loop = nil
         let old = connection
@@ -89,6 +95,10 @@ final class DeviceModel: Identifiable {
     private func run() async {
         var retry: Double = 5
         while !Task.isCancelled {
+            if passwordRejected {
+                status = .error(Self.passwordRejectedMessage)
+                return
+            }
             status = .connecting
             do {
                 let conn = connection
@@ -117,6 +127,11 @@ final class DeviceModel: Identifiable {
             } catch {
                 if Task.isCancelled { return }
                 if let k = error as? KeychainStore.KeychainError, case .notFound = k { needsPassword = true }
+                if let n = error as? NVMSError, n.isWrongCredentials {
+                    passwordRejected = true
+                    status = .error("\(n.description)。\(Self.passwordRejectedMessage)")
+                    return
+                }
                 status = .error(Self.describe(error))
                 try? await Task.sleep(for: .seconds(retry))
                 retry = min(retry * 2, 60)
@@ -130,6 +145,8 @@ final class DeviceModel: Identifiable {
         config.servicePort = d
         onConfigChanged?()
     }
+
+    static let passwordRejectedMessage = "已停止自動重試，避免帳號被鎖；請在「編輯…」重新輸入密碼，或確認後按「重新連線」"
 
     static func describe(_ e: Error) -> String {
         if let n = e as? NVMSError { return n.description }
@@ -151,7 +168,7 @@ final class DeviceModel: Identifiable {
     var orderedChannels: [DVRChannel] {
         let order = config.channelOrder
         guard !order.isEmpty else { return channels }
-        let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
+        let rank = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })   // 同步檔被手動改出重複項目時不當掉
         return channels.sorted { (rank[$0.id] ?? Int.max, $0.index) < (rank[$1.id] ?? Int.max, $1.index) }
     }
 

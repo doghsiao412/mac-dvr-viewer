@@ -231,16 +231,18 @@ final class AppStore {
         if let password, !password.isEmpty { try KeychainStore.setPassword(password, for: config.id) }
         guard let m = device(config.id) else { return }
         m.apply(config)
-        if password?.isEmpty == false { m.reconnect() }
+        if password?.isEmpty == false { m.reconnect(retryLogin: true) }
         persistDevices()
     }
 
-    func remove(_ id: UUID) {
+    /// keepPassword：其他 Mac 同步過來的移除不刪這台的鑰匙圈密碼。
+    /// 同步檔若被誤覆蓋成空清單，DVR 清單可以從同步檔救回來，密碼刪了就救不回來。
+    func remove(_ id: UUID, keepPassword: Bool = false) {
         guard let m = device(id) else { return }
         m.stop()
         devices.removeAll { $0.id == id }
         // 鑰匙圈存取可能要等使用者回應授權視窗：放到背景，避免畫面卡住
-        Task.detached { KeychainStore.deletePassword(for: id) }
+        if !keepPassword { Task.detached { KeychainStore.deletePassword(for: id) } }
         for i in customViews.indices { customViews[i].slots = customViews[i].slots.map { $0?.deviceID == id ? nil : $0 } }
         slots = slots.map { $0?.deviceID == id ? nil : $0 }
         if playbackRef?.deviceID == id { playbackRef = nil }
@@ -261,7 +263,7 @@ final class AppStore {
     /// 套用同步資料夾中其他 Mac 的設定（以最後寫入的為準）
     func applySynced(devices cfgs: [DeviceConfig], customViews cv: [CustomView]) {
         let ids = Set(cfgs.map(\.id))
-        for m in devices where !ids.contains(m.id) { remove(m.id) }   // 其他 Mac 移除的 DVR
+        for m in devices where !ids.contains(m.id) { remove(m.id, keepPassword: true) }   // 其他 Mac 移除的 DVR（保留這台的密碼）
         var list: [DeviceModel] = []
         for c in cfgs {
             if let m = device(c.id) {

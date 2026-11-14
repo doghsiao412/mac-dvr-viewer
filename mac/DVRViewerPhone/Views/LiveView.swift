@@ -122,6 +122,7 @@ struct LiveView: View {
             switch controller.phase {
             case .idle, .connecting: status("連線中…", spinning: true)
             case .reconnecting(let why): status("重新連線：\(why)", spinning: true)
+            case .undecodable(let why): status(why, spinning: false)
             case .playing: EmptyView()
             }
         }

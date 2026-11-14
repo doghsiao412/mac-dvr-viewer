@@ -10,6 +10,8 @@ final class LiveTileController {
     enum Phase: Equatable {
         case idle, connecting, playing
         case reconnecting(String)
+        /// 有資料但解不出畫面
+        case undecodable(String)
     }
 
     let renderer = VideoRenderer()
@@ -60,6 +62,7 @@ final class LiveTileController {
                 case .reconnecting(let why):
                     self.phase = .reconnecting(why)
                     if why.contains(DVRConnection.liveLimitMessage) { self.onLiveLimit?() }
+                case .undecodable(let why): self.phase = .undecodable(why)
                 case .stopped: self.phase = .idle
                 }
             }

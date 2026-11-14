@@ -70,8 +70,16 @@ public actor DVRConnection {
         return try await login()
     }
 
+    /// 帳號或密碼被 DVR 拒絕：這條連線不再送登入（每送一次就消耗一次嘗試次數，DVR 預設 5 次鎖帳號）。
+    /// 使用者重新輸入密碼或手動重新連線時，App 會建立新的連線物件。
+    public private(set) var credentialsRejected: NVMSError?
+    /// 其他登入失敗（例如帳號已被鎖定）：到此時間前不再嘗試
+    private var loginRetryAfter: (until: Date, error: Error)?
+
     private func login() async throws -> String {
         if let t = loginTask { return try await t.value }
+        if let e = credentialsRejected { throw e }
+        if let r = loginRetryAfter, r.until > Date() { throw r.error }
         let client = self.client
         let user = username
         let provider = passwordProvider
@@ -83,11 +91,32 @@ public actor DVRConnection {
         }
         loginTask = t
         defer { loginTask = nil }
-        return try await t.value
+        do {
+            let sid = try await t.value
+            loginRetryAfter = nil
+            return sid
+        } catch let e as NVMSError {
+            if e.isWrongCredentials {
+                credentialsRejected = e
+            } else if case .loginFailed = e {
+                loginRetryAfter = (Date().addingTimeInterval(600), e)
+            }
+            throw e
+        }
     }
 
-    /// 強制重新登入（Session 失效時）
+    /// Session 可能失效時呼叫（串流收到 Session 錯誤）：用一個查詢確認，真的失效才重新登入。
+    /// 多個畫面常同時發現失效；直接各自重登的話，後到的會把連線物件換成還沒登入的新物件，
+    /// 並在 DVR 上多留一個 Session。
     public func relogin() async throws {
+        if let t = loginTask { _ = try await t.value; return }
+        _ = try await withSession { try await $0.onlineChannelIds() }
+    }
+
+    /// 以新的連線物件重新登入；`used` 是發現失效時用的那個物件，已經被別的呼叫換掉就不再重登
+    private func relogin(replacing used: NVMSClient) async throws {
+        if let t = loginTask { _ = try await t.value; return }
+        guard client === used else { return }
         client = NVMSClient(host: host, port: port)
         _ = try await login()
     }
@@ -95,10 +124,11 @@ public actor DVRConnection {
     /// 執行查詢；Session 失效時重新登入並重試一次
     private func withSession<T: Sendable>(_ op: @Sendable (NVMSClient) async throws -> T) async throws -> T {
         _ = try await sessionId()
+        let used = client
         do {
-            return try await op(client)
+            return try await op(used)
         } catch where Self.isSessionError(error) {
-            try await relogin()
+            try await relogin(replacing: used)
             return try await op(client)
         }
     }
@@ -320,8 +350,9 @@ public actor DVRConnection {
     private func privateSession() async throws -> TVTPrivateClient {
         if let c = privateClient, await c.isConnected { return c }
         if let t = privateConnectTask { return try await t.value }
-        // 私有協定帳密被拒後 5 分鐘內不再送登入（每格畫面都會重連，連續失敗會讓 DVR 鎖帳號）
-        if let (until, err) = privateLoginBlocked, until > Date() { throw err }
+        // 私有協定帳密被拒：每格畫面都會重連，連續失敗會讓 DVR 鎖帳號。
+        // 第一次被拒後等 5 分鐘再試一次（可能只是暫時的）；再被拒就停止，直到使用者重新連線（建立新的連線物件）。
+        if let b = privateLoginBlocked, b.until.map({ $0 > Date() }) ?? true { throw b.error }
         let host = host, port = servicePort, user = username, provider = passwordProvider
         let sn = serialNumber
         let t = Task<TVTPrivateClient, Error> {
@@ -339,10 +370,14 @@ public actor DVRConnection {
         defer { privateConnectTask = nil }
         let c: TVTPrivateClient
         do { c = try await t.value } catch {
-            if case TVTPrivateClient.ClientError.loginFailed = error { privateLoginBlocked = (Date().addingTimeInterval(300), error) }
+            if case TVTPrivateClient.ClientError.loginFailed = error {
+                privateLoginFailures += 1
+                privateLoginBlocked = (privateLoginFailures >= 2 ? nil : Date().addingTimeInterval(300), error)
+            }
             throw error
         }
         privateLoginBlocked = nil
+        privateLoginFailures = 0
         privateClient = c
         return c
     }
@@ -401,8 +436,9 @@ public actor DVRConnection {
 
     /// 網頁 API 的設備序號（用來確認私有協定連到同一台設備）
     private var serialNumber: String?
-    /// 私有協定登入被拒：到此時間前不再嘗試
-    private var privateLoginBlocked: (Date, Error)?
+    /// 私有協定登入被拒：到此時間前不再嘗試（until 為 nil＝不再嘗試）
+    private var privateLoginBlocked: (until: Date?, error: Error)?
+    private var privateLoginFailures = 0
     /// 最近一次私有協定連線失敗的原因（顯示給使用者）
     private var privateFailure: String?
 

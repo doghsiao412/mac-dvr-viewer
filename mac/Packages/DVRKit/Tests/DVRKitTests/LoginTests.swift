@@ -31,4 +31,14 @@ struct LoginTests {
         #expect(e.description.contains("剩餘嘗試次數 3"))
         #expect(NVMSError.loginFailed(code: 536870951, remaining: 0, locked: true).description.contains("鎖定"))
     }
+
+    @Test func wrongCredentialsDetected() {
+        #expect(NVMSError.loginFailed(code: 536870947, remaining: 4, locked: false).isWrongCredentials)
+        #expect(NVMSError.loginFailed(code: 536870948, remaining: nil, locked: false).isWrongCredentials)
+        // 已鎖定、其他錯誤、連線問題：不是「密碼錯」，不能因此要求使用者重輸密碼
+        #expect(!NVMSError.loginFailed(code: 536870947, remaining: 0, locked: true).isWrongCredentials)
+        #expect(!NVMSError.loginFailed(code: 536870951, remaining: nil, locked: false).isWrongCredentials)
+        #expect(!NVMSError.transport("逾時").isWrongCredentials)
+        #expect(!NVMSError.device(command: "doLogin", code: 536870947).isWrongCredentials)
+    }
 }
