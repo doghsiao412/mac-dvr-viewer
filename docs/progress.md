@@ -9,6 +9,13 @@
 
 ## 下一版待辦
 
+* **1.6.4 已發佈（build 45）— 介面規範修正：Mac 與 iPhone 高優先項目（2026-11-17）**：依 ehmo/platform-design-skills 的 macOS／iOS 規範與 UI UX Pro Max 手機清單檢查（Mac 照 Apple 規範、iPhone 用 UUPM＋iOS 規範，使用者同意此分工）。
+  * Mac：新增「播放」選單（`PlaybackActions` 經 `focusedSceneValue` 提供；單鍵快捷鍵寫在名稱裡，⌘D、⌥⌘S 設在選單）；「檔案 → 加入 DVR…」⌘N（取代開新主視窗；主視窗關著時先打開）；`SidebarCommands`（⌃⌘S）；「輔助說明」連到 README；「畫面」選單加選取格子的聲音（⌥⌘A）、截圖（⌥⌘S）、雲台（⌥⌘T）；格子右鍵選單補上聲音、截圖、雲台、重設縮放；分割畫面方向鍵移動選取格子；側邊欄改成可選取的清單（方向鍵、Return 開啟，旁白讀成按鈕）；圖示按鈕加旁白名稱。
+  * iPhone：DVR 清單在輔助使用大字級時改上下排列（模擬器確認圖示不再壓字）；聲音按鈕約 44 點；分割畫面工具列加上一頁／下一頁（模擬器確認可換頁）；旁白開啟時橫放控制列固定顯示。
+  * 共用：雲台面板按鍵可用旁白操作（啟動時轉約半秒後停止）。
+  * 驗證：Mac、iPhone 編譯通過；iPhone 以 iPhone Duo 模擬器實測上述兩項。Mac 選單結構已讀出確認，但驗證時螢幕鎖定、主視窗不是前景，選單項目是否正確啟用、右鍵選單與方向鍵**未實際操作**。
+  * 尚未處理：兩份清單的中、低優先項目（Mac 7–12、iPhone 5–9）。
+
 * **1.6.3 已發佈（build 44）— 程式審查修正（2026-11-15）**：密碼錯誤停止自動重試（`credentialsRejected`／`passwordRejected`）、`reqLogin` 逾時不送密碼、重新登入以連線物件協調、私有協定同頻道共用串流（`LiveKey` 頻道＋類型）、同步移除保留鑰匙圈密碼。新增 `dvrcli sharetest`、`logintest`（只能對本機假 DVR）。第二批（第 6–10 項）：同步檔背景讀取、連線失敗關閉連線、`State.undecodable` 無法解碼提示、私有協定登入被拒第二次即停止、WebSocket 建立逾時、訊息長度上限、`channelOrder` 重複不當掉。驗證見 `docs/test-results.md` 最後一節。
 
 * ✅ **iPhone 雙指放大畫面（2026-11-13，使用者在 iPhone 確認操作順手）**：`mac/DVRViewerPhone/Views/ZoomableVideo.swift`，單頻道即時與回放頁使用。1–8 倍數位縮放、以手指位置為中心、放大後單指拖曳平移（不出界）、點兩下放大 2.5 倍／還原、左上角倍率按鈕點一下還原；切換頻道時還原。iPhone Duo 模擬器確認捏合、平移、還原；點兩下未能在模擬器測（連點送不出）。

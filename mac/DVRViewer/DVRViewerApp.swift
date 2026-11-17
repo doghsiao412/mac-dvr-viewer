@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -15,8 +16,15 @@ struct DVRViewerApp: App {
                 .windowToolbarFullScreenVisibility(.onHover)
         }
         .commands {
+            // 「檔案」：⌘N 改為加入 DVR（多個畫面請用「在新視窗開啟」攝影機視窗）
+            CommandGroup(replacing: .newItem) { AddDeviceCommand(store: store) }
+            SidebarCommands()   // 「顯示方式」：隱藏／顯示側邊欄（⌃⌘S）
             DVRCommands(store: store)
+            PlaybackCommands()
             CommandGroup(after: .appInfo) { CheckForUpdatesButton(updater: updater) }
+            CommandGroup(replacing: .help) {
+                Link("DVR Viewer 使用說明", destination: URL(string: "https://github.com/doghsiao412/mac-dvr-viewer#readme")!)
+            }
         }
 
         // 獨立攝影機視窗（可放到第二螢幕、可置頂）
@@ -39,6 +47,11 @@ struct DVRViewerApp: App {
 struct DVRCommands: Commands {
     let store: AppStore
 
+    private var selectedSupportsPTZ: Bool {
+        guard let r = store.selectedLiveRef, let d = store.device(r.deviceID) else { return false }
+        return d.ptzChannels.contains(r.channelID)
+    }
+
     var body: some Commands {
         CommandMenu("畫面") {
             Button("即時影像") { store.mode = .live }
@@ -53,6 +66,18 @@ struct DVRCommands: Commands {
             Divider()
             Button("放大／還原選取的畫面") { store.toggleEnlarge(store.focusedSlot) }
                 .keyboardShortcut(.return, modifiers: [.command])
+            Group {
+                Button(store.audioRef != nil && store.audioRef == store.selectedLiveRef ? "關閉選取畫面的聲音" : "開啟選取畫面的聲音") {
+                    store.toggleAudioForSelected()
+                }
+                .keyboardShortcut("a", modifiers: [.command, .option])
+                Button("截圖選取的畫面") { store.sendTileCommand(.snapshot) }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
+                Button("雲台控制") { store.sendTileCommand(.togglePTZ) }
+                    .keyboardShortcut("t", modifiers: [.command, .option])
+                    .disabled(!selectedSupportsPTZ)
+            }
+            .disabled(store.mode != .live || store.selectedLiveRef == nil)
             Button(store.immersive ? "離開全螢幕" : "全螢幕（隱藏介面）") { store.immersive.toggle() }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
                 .disabled(store.devices.isEmpty)
@@ -72,6 +97,86 @@ struct DVRCommands: Commands {
                 Button("切到「\(dev.config.name)」") { store.switchTo(dev.id) }
                     .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [.command, .option])
             }
+        }
+    }
+}
+
+/// 「檔案 → 加入 DVR…」：主視窗關著時先打開，再顯示新增視窗
+struct AddDeviceCommand: View {
+    let store: AppStore
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("加入 DVR…") {
+            let hasMain = NSApp.windows.contains { $0.identifier?.rawValue.hasPrefix("main") == true && $0.isVisible }
+            if !hasMain { openWindow(id: "main") }
+            Task { @MainActor in
+                if !hasMain { try? await Task.sleep(for: .milliseconds(400)) }
+                store.addDeviceRequested += 1
+            }
+        }
+        .keyboardShortcut("n")
+    }
+}
+
+// MARK: - 「播放」選單（錄影回放）
+
+/// 回放畫面提供給選單列的操作；回放畫面不在前景時為 nil，選單項目會停用
+struct PlaybackActions {
+    var isPlaying: Bool
+    var speed: Double
+    var speeds: [Double]
+    var audioOn: Bool
+    var togglePlay: () -> Void
+    var skip: (Double) -> Void
+    var step: () -> Void
+    var setSpeed: (Double) -> Void
+    var toggleAudio: () -> Void
+    var toggleEvents: () -> Void
+    var toggleTranscript: () -> Void
+    var markIn: () -> Void
+    var markOut: () -> Void
+    var clearMarks: () -> Void
+    var snapshot: () -> Void
+    var download: () -> Void
+}
+
+extension FocusedValues {
+    @Entry var playbackActions: PlaybackActions?
+}
+
+/// 回放畫面裡的單鍵快捷鍵（空白鍵、方向鍵、E、T、I、O、.）只在回放畫面有效，
+/// 選單項目把它們寫在名稱裡，方便查找；⌘ 組合鍵則直接設在選單上。
+struct PlaybackCommands: Commands {
+    @FocusedValue(\.playbackActions) private var actions
+
+    var body: some Commands {
+        CommandMenu("播放") {
+            Group {
+            Button(actions?.isPlaying == true ? "暫停（空白鍵）" : "播放（空白鍵）") { actions?.togglePlay() }
+            Button("倒退 10 秒（←）") { actions?.skip(-10) }
+            Button("前進 10 秒（→）") { actions?.skip(10) }
+            Button("逐格（.）") { actions?.step() }
+            Menu("播放速度") {
+                ForEach(actions?.speeds ?? [], id: \.self) { s in
+                    Toggle(s == 0.5 ? "0.5×" : "\(Int(s))×", isOn: Binding(get: { actions?.speed == s }, set: { _ in actions?.setSpeed(s) }))
+                }
+            }
+            Toggle("聲音", isOn: Binding(get: { actions?.audioOn ?? false }, set: { _ in actions?.toggleAudio() }))
+            Divider()
+            Button("事件清單（E）") { actions?.toggleEvents() }
+            Button("逐字稿（T）") { actions?.toggleTranscript() }
+            Divider()
+            Button("設為下載起點（I）") { actions?.markIn() }
+            Button("設為下載終點（O）") { actions?.markOut() }
+            Button("清除標記") { actions?.clearMarks() }
+            Divider()
+            Button("截圖") { actions?.snapshot() }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+            Button("下載錄影…") { actions?.download() }
+                .keyboardShortcut("d")
+            }
+            .disabled(actions == nil)
         }
     }
 }

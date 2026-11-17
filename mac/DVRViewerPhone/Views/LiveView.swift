@@ -19,6 +19,8 @@ struct LiveView: View {
     @AppStorage("phone.live.mainStream") private var mainStream = false
     @AppStorage("phone.live.audio") private var audioOn = false
     @State private var showControls = true
+    /// 旁白使用者沒辦法用「點一下畫面」叫出控制列：開啟旁白時一律顯示
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @State private var showPTZ = false
     @State private var ptzError: String?
     /// 畫面在最上層（推入回放頁時停止即時串流）
@@ -38,7 +40,7 @@ struct LiveView: View {
                 ZStack {
                     Color.black.ignoresSafeArea()
                     video
-                    if showControls {
+                    if showControls || voiceOver {
                         VStack {
                             Spacer()
                             controls
@@ -51,8 +53,8 @@ struct LiveView: View {
                 }
                 .contentShape(.rect)
                 .onTapGesture { withAnimation { showControls.toggle() } }
-                .toolbarVisibility(showControls ? .visible : .hidden, for: .navigationBar)
-                .statusBarHidden(!showControls)
+                .toolbarVisibility(showControls || voiceOver ? .visible : .hidden, for: .navigationBar)
+                .statusBarHidden(!(showControls || voiceOver))
                 .persistentSystemOverlays(.hidden)
             } else {
                 VStack(spacing: 0) {
@@ -157,7 +159,7 @@ struct LiveView: View {
                 audioOn.toggle()
             } label: {
                 Image(systemName: audioOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                    .frame(width: 28, height: 28)
+                    .frame(width: 32, height: 32)   // 加上按鈕外框後約 44 點（最小點按範圍）
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.circle)

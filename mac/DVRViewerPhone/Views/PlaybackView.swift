@@ -17,6 +17,8 @@ struct PlaybackView: View {
     @State private var loadingEvents = false
     @State private var sheet: SheetKind?
     @State private var showControls = true
+    /// 旁白開啟時控制列一律顯示（點一下畫面的手勢旁白使用者找不到）
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @AppStorage("phone.playback.mainStream") private var mainStream = false
     /// 已載入錄影範圍的日期（同一天重新載入時，從原本播放的時間接著播）
     @State private var loadedDay: Date?
@@ -46,7 +48,7 @@ struct PlaybackView: View {
                 ZStack {
                     Color.black.ignoresSafeArea()
                     video
-                    if showControls {
+                    if showControls || voiceOver {
                         VStack {
                             Spacer()
                             VStack(spacing: 6) {
@@ -63,8 +65,8 @@ struct PlaybackView: View {
                 }
                 .contentShape(.rect)
                 .onTapGesture { withAnimation { showControls.toggle() } }
-                .toolbarVisibility(showControls ? .visible : .hidden, for: .navigationBar)
-                .statusBarHidden(!showControls)
+                .toolbarVisibility(showControls || voiceOver ? .visible : .hidden, for: .navigationBar)
+                .statusBarHidden(!(showControls || voiceOver))
                 .persistentSystemOverlays(.hidden)
             } else if wide {
                 VStack(spacing: 8) {

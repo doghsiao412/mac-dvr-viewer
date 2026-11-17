@@ -7,9 +7,11 @@ struct SidebarView: View {
     @EnvironmentObject private var updater: UpdaterModel
     @Binding var editor: DeviceEditorTarget?
     @State private var removing: DeviceModel?
+    /// 鍵盤選取的頻道（方向鍵移動、Return 開啟）；滑鼠單擊仍直接開啟
+    @State private var selection: CameraRef?
 
     var body: some View {
-        List {
+        List(selection: $selection) {
             ForEach(store.devices) { dev in
                 Section(isExpanded: Binding(get: { store.isExpanded(dev.id) },
                                             set: { store.setExpanded(dev.id, $0) })) {
@@ -42,6 +44,11 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .onKeyPress(.return) {
+            guard let r = selection else { return .ignored }
+            activate(r)
+            return .handled
+        }
         // 左下角：背景檢查發現新版時的提示
         .safeAreaInset(edge: .bottom, spacing: 0) {
             UpdateAvailableBanner(updater: updater)
@@ -58,6 +65,13 @@ struct SidebarView: View {
             Button("移除「\(dev.config.name)」", role: .destructive) { store.remove(dev.id) }
         } message: { _ in
             Text("只會移除本 App 中的設定與 Keychain 密碼，不會影響 DVR 或錄影。")
+        }
+    }
+
+    private func activate(_ ref: CameraRef) {
+        switch store.mode {
+        case .live: store.showInLive(ref)
+        case .playback: store.showInPlayback(ref)
         }
     }
 
@@ -125,12 +139,14 @@ struct SidebarView: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            switch store.mode {
-            case .live: store.showInLive(ref)
-            case .playback: store.showInPlayback(ref)
-            }
-        }
+        .tag(ref)
+        .onTapGesture { selection = ref; activate(ref) }
+        // 旁白：讀成按鈕，啟動時與單擊相同
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(online ? (selected ? "顯示中" : "") : "離線")
+        .accessibilityAction { activate(ref) }
+        .accessibilityAction(named: "重新命名") { store.renaming = ref }
         // 雙擊重新命名（單擊照常立即生效，不會被延遲）
         .simultaneousGesture(TapGesture(count: 2).onEnded { store.renaming = ref })
         .padding(.vertical, 2)

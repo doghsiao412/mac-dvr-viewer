@@ -86,26 +86,35 @@ struct DeviceListView: View {
 }
 
 private struct DeviceRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .title2) private var iconWidth: CGFloat = 32
+    @ScaledMetric(relativeTo: .caption) private var dotSize: CGFloat = 8
     let device: DeviceModel
 
     var body: some View {
-        HStack(spacing: 12) {
+        // 輔助使用大字級：圖示放上面、文字獨佔整列（並排時圖示會壓到名稱）
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 12))
+        layout {
             Image(systemName: "server.rack")
                 .font(.title2)
                 .foregroundStyle(.secondary)
-                .frame(width: 32)
+                .frame(width: iconWidth)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.config.name).font(.headline)
                 HStack(spacing: 6) {
-                    Circle().fill(statusColor).frame(width: 8, height: 8)
+                    Circle().fill(statusColor).frame(width: dotSize, height: dotSize)
+                        .accessibilityHidden(true)
                     Text(statusText)
-                        .lineLimit(2)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 
     private var statusText: String {

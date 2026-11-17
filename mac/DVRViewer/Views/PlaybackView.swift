@@ -57,6 +57,7 @@ struct PlaybackView: View {
             await loadEvents()
         }
         .onChange(of: day) { markIn = nil; markOut = nil }
+        .focusedSceneValue(\.playbackActions, playbackActions)
         #if DEBUG
         .onAppear { if UITestHarness.scene == "transcript" { showTranscript = true } }
         #endif
@@ -382,11 +383,13 @@ struct PlaybackView: View {
         HStack(spacing: 12) {
             Button { controller.step() } label: { Image(systemName: "forward.frame") }
                 .help("逐格（.）").keyboardShortcut(".", modifiers: [])
+                .accessibilityLabel("逐格")
             Button { togglePlaybackAudio() } label: {
                 Image(systemName: controller.audioOn ? "speaker.wave.2.fill" : "speaker.slash")
                     .frame(width: 20)
             }
             .help(controller.audioOn ? "關閉聲音" : "開啟聲音（只在 1× 播放時輸出）")
+            .accessibilityLabel(controller.audioOn ? "關閉聲音" : "開啟聲音")
             if controller.audioOn {
                 Slider(value: Binding(get: { store.volume }, set: { store.volume = $0 }), in: 0...1)
                     .frame(width: 70)
@@ -402,6 +405,7 @@ struct PlaybackView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .help("播放速度（>4× 只顯示關鍵幀）")
+            .accessibilityLabel("播放速度 \(Self.speedText(controller.speed))")
         }
         .fixedSize()
     }
@@ -415,6 +419,7 @@ struct PlaybackView: View {
         HStack(spacing: 20) {
             Button { controller.skip(-10) } label: { Image(systemName: "gobackward.10").font(.title2) }
                 .help("倒退 10 秒").keyboardShortcut(.leftArrow, modifiers: [])
+                .accessibilityLabel("倒退 10 秒")
             Button { togglePlay() } label: {
                 Image(systemName: controller.isPaused || controller.phase == .idle || controller.phase == .ended ? "play.fill" : "pause.fill")
                     .font(.title2)
@@ -424,8 +429,10 @@ struct PlaybackView: View {
             .buttonBorderShape(.circle)
             .help("播放／暫停（空白鍵）")
             .keyboardShortcut(.space, modifiers: [])
+            .accessibilityLabel(isPlaying ? "暫停" : "播放")
             Button { controller.skip(10) } label: { Image(systemName: "goforward.10").font(.title2) }
                 .help("前進 10 秒").keyboardShortcut(.rightArrow, modifiers: [])
+                .accessibilityLabel("前進 10 秒")
         }
     }
 
@@ -468,7 +475,6 @@ struct PlaybackView: View {
                 .help("截圖")
             Button { showExport = true } label: { toolLabel("下載", "arrow.down.circle", labels) }
                 .help("下載錄影（⌘D）")
-                .keyboardShortcut("d", modifiers: [.command])
         }
         .fixedSize()
     }
@@ -618,6 +624,23 @@ struct PlaybackView: View {
         guard sources.contains(where: { $0 != nil }) else { return }
         lastStart = StartKey(grid: store.playbackGrid, day: day)
         controller.open(sources, focus: store.playbackLayout == 1 ? 0 : store.playbackFocus, mainStream: mainStream, at: target)
+    }
+
+    private var isPlaying: Bool {
+        !(controller.isPaused || controller.phase == .idle || controller.phase == .ended)
+    }
+
+    /// 給選單列「播放」選單用的操作
+    private var playbackActions: PlaybackActions? {
+        guard store.mode == .playback, store.playbackRef != nil else { return nil }
+        return PlaybackActions(
+            isPlaying: isPlaying, speed: controller.speed, speeds: speeds, audioOn: controller.audioOn,
+            togglePlay: { togglePlay() }, skip: { controller.skip($0) }, step: { controller.step() },
+            setSpeed: { controller.setSpeed($0) }, toggleAudio: { togglePlaybackAudio() },
+            toggleEvents: { showEvents.toggle() }, toggleTranscript: { showTranscript.toggle() },
+            markIn: { setMark(in: true) }, markOut: { setMark(in: false) },
+            clearMarks: { markIn = nil; markOut = nil },
+            snapshot: { snapshot() }, download: { showExport = true })
     }
 
     private func togglePlay() {

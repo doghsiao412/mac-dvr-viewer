@@ -64,6 +64,7 @@ struct ContentView: View {
             #endif
         })
         .onChange(of: store.immersive) { _, on in applyImmersive(on) }
+        .onChange(of: store.addDeviceRequested) { _, _ in editor = .new }
         // 全螢幕動畫完成後才收合介面
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { n in
             if store.immersive, (n.object as? NSWindow) === window { hideChrome() }

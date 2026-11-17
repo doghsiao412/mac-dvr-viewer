@@ -47,9 +47,19 @@ struct ChannelGridView: View {
                     .onChange(of: pages.count) { _, n in page = min(page, max(n - 1, 0)) }
                     .toolbar {
                         if pages.count > 1 {
-                            ToolbarItem(placement: .topBarTrailing) {
+                            // 換頁：可以左右滑，也可以按按鈕（旁白、切換控制使用者無法用滑的）
+                            ToolbarItemGroup(placement: .topBarTrailing) {
+                                Button { withAnimation { page = max(page - 1, 0) } } label: {
+                                    Label("上一頁", systemImage: "chevron.left")
+                                }
+                                .disabled(page == 0)
                                 Text("\(min(page, pages.count - 1) + 1)／\(pages.count)")
                                     .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                                    .accessibilityLabel("第 \(min(page, pages.count - 1) + 1) 頁，共 \(pages.count) 頁")
+                                Button { withAnimation { page = min(page + 1, pages.count - 1) } } label: {
+                                    Label("下一頁", systemImage: "chevron.right")
+                                }
+                                .disabled(page >= pages.count - 1)
                             }
                         }
                     }

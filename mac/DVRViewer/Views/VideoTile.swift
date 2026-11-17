@@ -7,6 +7,10 @@ struct VideoTile: View {
     let device: DeviceModel
     var mainStream: Bool
     var aspect: VideoAspect
+    /// 這一格是即時畫面中選取的格子（選單列的截圖、雲台指令對它執行）
+    var isSelected = false
+    /// 呼叫端加在右鍵選單後段的項目
+    var extraMenu: AnyView?
 
     @State private var controller = LiveTileController()
     @State private var zoom: CGFloat = 1
@@ -47,6 +51,25 @@ struct VideoTile: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tileWidth = $0 }
         .animation(.snappy(duration: 0.2), value: showPTZ)
         .onHover { hovering = $0 }
+        // 滑鼠移上去才出現的按鈕，也放進右鍵選單（鍵盤與旁白可用）
+        .contextMenu {
+            Button(audioOn ? "關閉聲音" : "開啟聲音") { toggleAudio() }
+            Button("截圖") { takeSnapshot() }
+            if canPTZ { Button(showPTZ ? "隱藏雲台控制" : "雲台控制") { showPTZ.toggle() } }
+            if zoom > 1.01 { Button("重設縮放") { resetZoom() } }
+            if let extraMenu {
+                Divider()
+                extraMenu
+            }
+        }
+        .onChange(of: store.tileCommand?.id) { _, _ in
+            guard isSelected, let c = store.tileCommand else { return }
+            switch c.kind {
+            case .snapshot: takeSnapshot()
+            case .togglePTZ:
+                if canPTZ { showPTZ.toggle() } else { store.showToast("放大畫面後才能使用雲台控制") }
+            }
+        }
         .onChange(of: audioOn, initial: true) { _, on in controller.setAudio(on) }
         .onChange(of: store.volume, initial: true) { _, v in controller.setVolume(v) }
         .onAppear {
@@ -136,16 +159,18 @@ struct VideoTile: View {
             if canPTZ {
                 iconButton(showPTZ ? "dpad.fill" : "dpad", showPTZ ? "隱藏雲台控制" : "雲台控制") { showPTZ.toggle() }
             }
-            iconButton("camera", "截圖") {
-                store.saveSnapshot(controller.renderer.lastPixelBuffer, name: device.displayName(ref.channelID),
-                                   time: controller.renderer.lastTime)
-            }
+            iconButton("camera", "截圖") { takeSnapshot() }
         }
         }
         .padding(6)
     }
 
     private var audioOn: Bool { store.audioRef == ref }
+
+    private func takeSnapshot() {
+        store.saveSnapshot(controller.renderer.lastPixelBuffer, name: device.displayName(ref.channelID),
+                           time: controller.renderer.lastTime)
+    }
 
     /// 支援雲台、且畫面夠大（放大或單一畫面）時才提供雲台控制
     private var canPTZ: Bool { device.ptzChannels.contains(ref.channelID) && tileWidth >= 480 }
@@ -165,6 +190,7 @@ struct VideoTile: View {
         .buttonBorderShape(.circle)
         .controlSize(.small)
         .help(help)
+        .accessibilityLabel(help)
     }
 
     // MARK: - 數位縮放（觸控板捏合；放大後可拖曳平移）

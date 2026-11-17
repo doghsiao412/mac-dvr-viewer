@@ -26,6 +26,7 @@ struct PTZPad: View {
                 GridRow {
                     key(.left, "arrow.left")
                     Image(systemName: "video").font(.caption).foregroundStyle(.secondary).frame(width: keySize, height: keySize)
+                        .accessibilityHidden(true)
                     key(.right, "arrow.right")
                 }
                 GridRow { key(.leftDown, "arrow.down.left"); key(.down, "arrow.down"); key(.rightDown, "arrow.down.right") }
@@ -81,6 +82,14 @@ struct PTZPad: View {
         .background(active == action ? AnyShapeStyle(.tint.opacity(0.35)) : AnyShapeStyle(.white.opacity(0.08)), in: .rect(cornerRadius: 8))
         .contentShape(.rect)
         .help(help ?? "")
+        // 旁白：讀成按鈕；啟動時轉動約半秒後停止（按住的手勢旁白使用者做不到）
+        .accessibilityElement()
+        .accessibilityLabel(help ?? Self.accessibilityName(action))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            send(action)
+            Task { try? await Task.sleep(for: .milliseconds(500)); send(.stop) }
+        }
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { _ in
                 guard active == nil else { return }
@@ -92,6 +101,26 @@ struct PTZPad: View {
                 active = nil
                 send(.stop)
             })
+    }
+
+    private static func accessibilityName(_ a: A) -> String {
+        switch a {
+        case .up: return "向上"
+        case .down: return "向下"
+        case .left: return "向左"
+        case .right: return "向右"
+        case .leftUp: return "左上"
+        case .leftDown: return "左下"
+        case .rightUp: return "右上"
+        case .rightDown: return "右下"
+        case .zoomIn: return "縮小"
+        case .zoomOut: return "放大"
+        case .near: return "對焦近處"
+        case .far: return "對焦遠處"
+        case .irisOpen: return "光圈開大"
+        case .irisClose: return "光圈縮小"
+        case .stop: return "停止"
+        }
     }
 
     private func send(_ action: A) {

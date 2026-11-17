@@ -53,6 +53,37 @@ final class AppStore {
     }
     var focusedSlot: Int = 0
     var enlargedSlot: Int?
+
+    /// 選單列「加入 DVR…」（⌘N）：ContentView 收到後打開新增視窗
+    var addDeviceRequested = 0
+
+    /// 選單列對「選取的格子」下的指令（截圖、雲台）：由該格的 VideoTile 執行
+    enum TileCommand: Equatable { case snapshot, togglePTZ }
+    var tileCommand: (id: UUID, kind: TileCommand)?
+
+    func sendTileCommand(_ k: TileCommand) { tileCommand = (UUID(), k) }
+
+    /// 即時畫面目前選取（或放大中）的格子
+    var selectedLiveSlot: Int { enlargedSlot ?? focusedSlot }
+    var selectedLiveRef: CameraRef? {
+        let s = selectedLiveSlot
+        return gridSlots.indices.contains(s) ? gridSlots[s] : nil
+    }
+
+    /// 方向鍵移動選取的格子（分割畫面）
+    func moveFocus(dx: Int, dy: Int) {
+        guard enlargedSlot == nil else { return }
+        let n = max(1, Int(Double(gridLayout).squareRoot()))
+        let r = focusedSlot / n, c = focusedSlot % n
+        let nr = min(max(r + dy, 0), n - 1), nc = min(max(c + dx, 0), n - 1)
+        focusedSlot = nr * n + nc
+    }
+
+    /// 開關選取格子的聲音（同時只有一格出聲）
+    func toggleAudioForSelected() {
+        guard let r = selectedLiveRef else { return }
+        audioRef = audioRef == r ? nil : r
+    }
     /// 每支攝影機的個別設定（跟著攝影機走，換頁、切 DVR、換自訂畫面都不會套到別支）
     var cameraMainStream: [CameraRef: Bool] = AppStore.loadDict("cameraMainStream") {
         didSet { Self.saveDict(cameraMainStream, "cameraMainStream") }

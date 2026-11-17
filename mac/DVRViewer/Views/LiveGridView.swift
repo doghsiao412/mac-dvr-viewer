@@ -20,6 +20,7 @@ struct LiveGridView: View {
                         .buttonBorderShape(.circle)
                         .controlSize(.large)
                         .help("返回分割畫面（也可再雙擊畫面）")
+                        .accessibilityLabel("返回分割畫面")
                         .padding(12)
                     }
             } else {
@@ -62,6 +63,17 @@ struct LiveGridView: View {
         .focusEffectDisabled()
         .focused($gridFocused)
         .simultaneousGesture(TapGesture().onEnded { gridFocused = true })
+        // 方向鍵移動選取的格子（⌘↩ 放大、⌥⌘A 聲音、⌥⌘S 截圖）
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+            guard store.enlargedSlot == nil, store.gridLayout > 1 else { return .ignored }
+            switch press.key {
+            case .leftArrow: store.moveFocus(dx: -1, dy: 0)
+            case .rightArrow: store.moveFocus(dx: 1, dy: 0)
+            case .upArrow: store.moveFocus(dx: 0, dy: -1)
+            default: store.moveFocus(dx: 0, dy: 1)
+            }
+            return .handled
+        }
         .onKeyPress(keys: [.delete, .deleteForward]) { _ in
             let slot = store.enlargedSlot ?? store.focusedSlot
             guard store.isCustomLive, store.slots.indices.contains(slot), store.slots[slot] != nil else { return .ignored }
@@ -79,12 +91,12 @@ struct PageControl: View {
     var body: some View {
         HStack(spacing: 4) {
             Button { store.changePage(by: -1) } label: { Image(systemName: "chevron.left").frame(width: 20, height: 20) }
-                .help("上一頁（⌘[）")
+                .help("上一頁（⌘[）").accessibilityLabel("上一頁")
             Text("\(store.dvrPage + 1) / \(store.pageCount)")
                 .font(.callout.monospacedDigit().weight(.medium))
                 .frame(minWidth: 48)
             Button { store.changePage(by: 1) } label: { Image(systemName: "chevron.right").frame(width: 20, height: 20) }
-                .help("下一頁（⌘]）")
+                .help("下一頁（⌘]）").accessibilityLabel("下一頁")
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 10).padding(.vertical, 6)
@@ -105,8 +117,8 @@ struct LiveSlotView: View {
         ZStack {
             if let ref, let dev = store.device(ref.deviceID) {
                 VideoTile(ref: ref, device: dev, mainStream: store.wantsMainStream(slot: slot),
-                          aspect: store.aspect(slot: slot))
-                    .contextMenu { menu(ref) }
+                          aspect: store.aspect(slot: slot), isSelected: store.selectedLiveSlot == slot,
+                          extraMenu: AnyView(menu(ref)))
             } else {
                 VStack(spacing: 6) {
                     if store.isCustomLive {
