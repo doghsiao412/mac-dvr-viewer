@@ -9,6 +9,8 @@
 
 ## 下一版待辦
 
+* **iPhone 自動重裝修正（2026-11-18）**：iPhone App 在 11/15 左右過期。原因：① Xcode 的 Apple ID 被登出（`DVTDeveloperAccountManagerAppleIDLists` 為空，xcodebuild 回報 No Accounts），無法產生新描述檔；② 腳本只看「上次安裝滿 5 天」，但 App 實際到期看描述檔建立日（重裝可能沿用舊描述檔）。`tools/iphone-autoinstall.sh` 改為：依描述檔到期前 2 天或安裝滿 5 天（取較早）續期，安裝後記錄 `profile-expires`；編出的描述檔剩不到 3 天時刪掉本機那份 `local.dvrviewer.phone` 描述檔重新產生；Xcode 未登入時通知「請到設定 → Accounts 登入」（一天一次）。使用者重新登入後已重裝（描述檔 11/25 到期，下次自動續期約 11/23）。
+
 * **1.6.4 已發佈（build 45）— 介面規範修正：Mac 與 iPhone 高優先項目（2026-11-17）**：依 ehmo/platform-design-skills 的 macOS／iOS 規範與 UI UX Pro Max 手機清單檢查（Mac 照 Apple 規範、iPhone 用 UUPM＋iOS 規範，使用者同意此分工）。
   * Mac：新增「播放」選單（`PlaybackActions` 經 `focusedSceneValue` 提供；單鍵快捷鍵寫在名稱裡，⌘D、⌥⌘S 設在選單）；「檔案 → 加入 DVR…」⌘N（取代開新主視窗；主視窗關著時先打開）；`SidebarCommands`（⌃⌘S）；「輔助說明」連到 README；「畫面」選單加選取格子的聲音（⌥⌘A）、截圖（⌥⌘S）、雲台（⌥⌘T）；格子右鍵選單補上聲音、截圖、雲台、重設縮放；分割畫面方向鍵移動選取格子；側邊欄改成可選取的清單（方向鍵、Return 開啟，旁白讀成按鈕）；圖示按鈕加旁白名稱。
   * iPhone：DVR 清單在輔助使用大字級時改上下排列（模擬器確認圖示不再壓字）；聲音按鈕約 44 點；分割畫面工具列加上一頁／下一頁（模擬器確認可換頁）；旁白開啟時橫放控制列固定顯示。
