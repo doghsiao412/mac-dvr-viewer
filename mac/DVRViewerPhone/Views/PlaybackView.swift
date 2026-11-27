@@ -4,7 +4,15 @@ import SwiftUI
 /// 單一頻道錄影回放。直放：影像在上、時間軸與控制在下；橫放：影像全螢幕，點一下顯示／隱藏控制。
 struct PlaybackView: View {
     let device: DeviceModel
-    let channelID: String
+    /// 目前回放的頻道（左右滑影像可切換，從同一個時間接著播）
+    @State private var channelID: String
+    /// 已載入錄影範圍的頻道（換頻道時，接續的時間若沒有錄影就跳到下一段）
+    @State private var loadedChannel: String?
+
+    init(device: DeviceModel, channelID: String) {
+        self.device = device
+        _channelID = State(initialValue: channelID)
+    }
 
     @State private var controller = PlaybackController()
     @State private var day = Calendar.current.startOfDay(for: Date())
@@ -145,10 +153,10 @@ struct PlaybackView: View {
                             mainStream: mainStream)
             }
         }
-        .task(id: QueryKey(day: day, conn: ObjectIdentifier(device.connection), online: device.status == .online)) {
+        .task(id: QueryKey(channelID: channelID, day: day, conn: ObjectIdentifier(device.connection), online: device.status == .online)) {
             await loadRanges()
         }
-        .task(id: QueryKey(day: day, conn: ObjectIdentifier(device.connection), online: device.status == .online)) {
+        .task(id: QueryKey(channelID: channelID, day: day, conn: ObjectIdentifier(device.connection), online: device.status == .online)) {
             await loadEvents()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -169,7 +177,8 @@ struct PlaybackView: View {
 
     private var video: some View {
         ZStack {
-            ZoomableVideo(renderer: controller.renderer)
+            ZoomableVideo(renderer: controller.renderer, onSwipe: { switchChannel(by: $0) })
+                .id(channelID)   // 切換頻道時還原縮放
             overlay
         }
     }
@@ -381,9 +390,12 @@ struct PlaybackView: View {
             let r = try await device.connection.recordRanges(channelId: channelID, day: day)
             guard !Task.isCancelled else { return }
             ranges = r
+            let channelChanged = loadedChannel != nil && loadedChannel != channelID
             loadedDay = day
+            loadedChannel = channelID
             if let resumeAt, !r.isEmpty {
-                startOrSeek(resumeAt, snap: false)
+                // 換頻道：新頻道在這個時間可能沒有錄影，沒有就跳到下一段
+                startOrSeek(resumeAt, snap: channelChanged)
                 return
             }
             if r.isEmpty {
@@ -430,7 +442,16 @@ struct PlaybackView: View {
         }
     }
 
+    /// 左右滑切換：所有頻道之間循環（離線的攝影機也可能有錄影）
+    private func switchChannel(by step: Int) {
+        let list = device.orderedChannels.map(\.id)
+        guard list.count > 1 else { return }
+        let i = list.firstIndex(of: channelID) ?? 0
+        channelID = list[(i + step + list.count) % list.count]
+    }
+
     private struct QueryKey: Hashable {
+        let channelID: String
         let day: Date
         let conn: ObjectIdentifier
         let online: Bool

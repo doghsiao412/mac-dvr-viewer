@@ -9,6 +9,10 @@
 
 ## 下一版待辦
 
+* **iPhone 左右滑切換攝影機（2026-11-26，使用者實機確認正常）**：`ZoomableVideo` 加 `onSwipe`：未放大時水平滑超過 60 pt（且明顯多於垂直）切換，滑動中畫面跟著移動、切換時輕震；放大時仍是平移；同一次觸控有捏合過不算；旁白提供「上一支／下一支攝影機」。單頻道即時在線上頻道間循環；回放在所有頻道間循環，從同一時間接著播（新頻道該時間無錄影時跳到下一段）。編譯通過；模擬器 iOS 執行環境不見了（Unavailable），未在模擬器測；使用者在 iPhone 實機確認切換正常。
+  * 同時發現 Xcode Apple ID 在 11/18 登入後、11/23 前又被登出（11/18 也被登出過），自動續期 11/23 起失敗，App 11/25 過期；使用者 11/26 重新登入後手動安裝（描述檔 12/03 到期），並手動更新自動重裝的 last-install／profile-expires，避免排程用已提交舊版覆蓋。原因未明（同時期模擬器執行環境也消失，疑似清理工具）。
+  * 2026-11-26 起使用者不再使用 Codex。
+
 * **iPhone 自動重裝修正（2026-11-18）**：iPhone App 在 11/15 左右過期。原因：① Xcode 的 Apple ID 被登出（`DVTDeveloperAccountManagerAppleIDLists` 為空，xcodebuild 回報 No Accounts），無法產生新描述檔；② 腳本只看「上次安裝滿 5 天」，但 App 實際到期看描述檔建立日（重裝可能沿用舊描述檔）。`tools/iphone-autoinstall.sh` 改為：依描述檔到期前 2 天或安裝滿 5 天（取較早）續期，安裝後記錄 `profile-expires`；編出的描述檔剩不到 3 天時刪掉本機那份 `local.dvrviewer.phone` 描述檔重新產生；Xcode 未登入時通知「請到設定 → Accounts 登入」（一天一次）。使用者重新登入後已重裝（描述檔 11/25 到期，下次自動續期約 11/23）。
 
 * **1.6.4 已發佈（build 45）— 介面規範修正：Mac 與 iPhone 高優先項目（2026-11-17）**：依 ehmo/platform-design-skills 的 macOS／iOS 規範與 UI UX Pro Max 手機清單檢查（Mac 照 Apple 規範、iPhone 用 UUPM＋iOS 規範，使用者同意此分工）。

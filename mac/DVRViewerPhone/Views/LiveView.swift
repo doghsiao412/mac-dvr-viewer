@@ -111,7 +111,7 @@ struct LiveView: View {
 
     private var video: some View {
         ZStack {
-            ZoomableVideo(renderer: controller.renderer)
+            ZoomableVideo(renderer: controller.renderer, onSwipe: { switchChannel(by: $0) })
                 .id(channelID)   // 切換頻道時還原縮放
             overlay
         }
@@ -200,6 +200,14 @@ struct LiveView: View {
         }
         .listStyle(.insetGrouped)
         .contentMargins(.top, 0, for: .scrollContent)
+    }
+
+    /// 左右滑切換：在線上的頻道之間循環（依自訂排序）
+    private func switchChannel(by step: Int) {
+        let list = device.orderedChannels.filter { device.isOnline($0.id) }.map(\.id)
+        guard list.count > 1 else { return }
+        let i = list.firstIndex(of: channelID) ?? 0
+        channelID = list[(i + step + list.count) % list.count]
     }
 
     private struct StreamKey: Hashable {
