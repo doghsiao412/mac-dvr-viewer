@@ -191,10 +191,9 @@ private struct GridTile: View {
                 overlay.frame(maxWidth: .infinity, maxHeight: .infinity)
                 Text(device.displayName(channel.id))
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white)
                     .lineLimit(1)
-                    .shadow(color: .black, radius: 2)
-                    .padding(6)
+                    .videoLabelStyle()
+                    .padding(4)
             }
             .background(.black)
             .clipShape(.rect(cornerRadius: 8))

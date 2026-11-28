@@ -4,12 +4,19 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
   <channel>
     <title>DVR Viewer 更新</title>
     <item>
-      <title>DVR Viewer 1.6.4</title>
-      <pubDate>Tue, 17 Nov 2026 04:21:08 GMT</pubDate>
-      <sparkle:version>45</sparkle:version>
-      <sparkle:shortVersionString>1.6.4</sparkle:shortVersionString>
+      <title>DVR Viewer 1.6.5</title>
+      <pubDate>Sat, 28 Nov 2026 06:10:20 GMT</pubDate>
+      <sparkle:version>46</sparkle:version>
+      <sparkle:shortVersionString>1.6.5</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="markdown"><![CDATA[v1.6.4
+      <description sparkle:format="markdown"><![CDATA[v1.6.5
+
+- 介面依 Apple 的 Liquid Glass 設計規範調整：玻璃只用在浮在畫面上的控制項，按鈕不再疊在另一層玻璃上，玻璃上的文字更清楚。
+- 影像上的攝影機名稱改成半透明深色底，明亮畫面上也看得清楚。
+- 連線中、頻道離線、播放結束、這天沒有錄影等提示改用霧面底。
+- 控制列與雲台面板出現、消失時改用系統的玻璃浮現效果。
+
+v1.6.4
 
 - 選單列新增「播放」選單：播放／暫停、前進後退、逐格、播放速度、聲音、事件、逐字稿、下載範圍標記、截圖與下載都能從選單找到，並標示快捷鍵。
 - 「檔案 → 加入 DVR…」改用 ⌘N；「顯示方式」選單可隱藏／顯示側邊欄（⌃⌘S）；「輔助說明」連到使用說明。
@@ -225,11 +232,11 @@ v0.1
 - 錄影下載：指定時段存成 MP4（影像不轉碼），自動略過無錄影空檔。
 - 設備管理：密碼存 macOS 鑰匙圈、自動重連、頻道自訂名稱與排序、側邊欄可收合。
 ]]></description>
-      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.6.4/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
-      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.6.4/DVR-Viewer-1.6.4.dmg" sparkle:edSignature="gV60tv69oLFQcKafwQV2CuS+Gu95OCJzX6TzAdQyD3Dk0cixNkKSMHgxhRPzPXCbMIJIpLgYiA8Z2ms7sVI/AQ==" length="3215350" type="application/octet-stream"></enclosure>
+      <sparkle:fullReleaseNotesLink>https://github.com/doghsiao412/mac-dvr-viewer/blob/v1.6.5/RELEASE_NOTES.md</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/doghsiao412/mac-dvr-viewer/releases/download/v1.6.5/DVR-Viewer-1.6.5.dmg" sparkle:edSignature="8Fu+uXr/Mhqrhj9uOf34HgNSTg7Z41W35H6UL04SsDwiRr9DYvsVhFunu8W+k1DvdrwlIJPnh/ZpMzdQlTw3AQ==" length="3228432" type="application/octet-stream"></enclosure>
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: zYA7KqM24nT8YEe2q/MNZdoMTGNSZF83r8oaXG1ZRJd/Y4aiM3+oGV7bXHLGj9WeN7gBzIJqwwvn7Bu/WbtdDA==
-length: 15146
+edSignature: gx+8N92pS8LFYvQgyfbBPOpZcY61twwjeVYae5ZW7c3HYneDmp9jI657PXjzwa8dd84GO+3N+oIoaj9Ro+jiAg==
+length: 15587
 -->

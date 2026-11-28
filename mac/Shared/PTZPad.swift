@@ -6,6 +6,8 @@ struct PTZPad: View {
     let connection: DVRConnection
     let channelID: String
     var onError: (String) -> Void
+    /// 自己畫玻璃底。放在已經是玻璃的地方（例如 iPhone 的工作表）時設為 false，避免玻璃疊玻璃
+    var glassBackground = true
 
     @AppStorage("ptzSpeed") private var speed = 4.0
     @State private var presets: [(index: Int, name: String)] = []
@@ -38,20 +40,20 @@ struct PTZPad: View {
                         key(.zoomIn, "minus.magnifyingglass", help: "縮小（拉遠）")
                         key(.zoomOut, "plus.magnifyingglass", help: "放大（拉近）")
                     }
-                    Text("變焦").font(.caption2).foregroundStyle(.secondary)
+                    Text("變焦").font(.caption2)
                 }
                 VStack(spacing: 3) {
                     HStack(spacing: 4) {
                         key(.near, text: "近", help: "對焦近處（讓近的東西清楚）")
                         key(.far, text: "遠", help: "對焦遠處（讓遠的東西清楚）")
                     }
-                    Text("對焦").font(.caption2).foregroundStyle(.secondary)
+                    Text("對焦").font(.caption2)
                 }
             }
             HStack(spacing: 6) {
-                Image(systemName: "tortoise").font(.caption2).foregroundStyle(.secondary)
+                Image(systemName: "tortoise").font(.caption2)
                 Slider(value: $speed, in: 1...8, step: 1).frame(width: keySize * 3).controlSize(.mini)
-                Image(systemName: "hare").font(.caption2).foregroundStyle(.secondary)
+                Image(systemName: "hare").font(.caption2)
             }
             .help("雲台速度 \(Int(speed))")
             if !presets.isEmpty {
@@ -63,11 +65,11 @@ struct PTZPad: View {
                 #if os(macOS)
                 .menuStyle(.button)
                 #endif
-                .buttonStyle(.glass).controlSize(.small).fixedSize()
+                .buttonStyle(.bordered).controlSize(.small).fixedSize()   // 面板本身是玻璃：按鈕不再疊玻璃
             }
         }
         .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+        .modifier(PTZGlass(enabled: glassBackground))
         .task(id: channelID) { presets = (try? await connection.ptzPresets(channelId: channelID)) ?? [] }
         .onDisappear { if active != nil { send(.stop) } }
     }
@@ -148,5 +150,19 @@ final class PTZSendQueue {
     func enqueue(_ op: @escaping @Sendable () async -> Void) {
         let prev = last
         last = Task { await prev?.value; await op() }
+    }
+}
+
+/// 雲台面板的玻璃底（加上「浮現」轉場）；enabled 為 false 時不畫
+private struct PTZGlass: ViewModifier {
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .glassEffect(.regular, in: .rect(cornerRadius: 18))
+                .glassEffectTransition(.materialize)
+        } else {
+            content
+        }
     }
 }

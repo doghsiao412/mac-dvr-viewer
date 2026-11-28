@@ -40,15 +40,18 @@ struct LiveView: View {
                 ZStack {
                     Color.black.ignoresSafeArea()
                     video
-                    if showControls || voiceOver {
-                        VStack {
-                            Spacer()
-                            controls
-                                .padding(12)
-                                .glassEffect(in: .rect(cornerRadius: 20))
-                                .padding()
+                    // 玻璃控制列用「浮現」轉場（淡入淡出會留下霧濛濛的殘影）
+                    GlassEffectContainer {
+                        if showControls || voiceOver {
+                            VStack {
+                                Spacer()
+                                controls
+                                    .padding(12)
+                                    .glassEffect(in: .rect(cornerRadius: 20))
+                                    .glassEffectTransition(.materialize)
+                                    .padding()
+                            }
                         }
-                        .transition(.opacity)
                     }
                 }
                 .contentShape(.rect)
@@ -96,7 +99,7 @@ struct LiveView: View {
         }
         // 雲台面板：半高工作表，影像仍在上方可見
         .sheet(isPresented: $showPTZ) {
-            PTZPad(connection: device.connection, channelID: channelID) { ptzError = $0 }
+            PTZPad(connection: device.connection, channelID: channelID, onError: { ptzError = $0 }, glassBackground: false)
                 .presentationDetents([.height(420)])
                 .presentationBackgroundInteraction(.enabled)
                 .presentationDragIndicator(.visible)

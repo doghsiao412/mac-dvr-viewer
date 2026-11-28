@@ -96,7 +96,7 @@ struct UpdateAvailableBanner: View {
                         .foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("有新版本 \(v)").font(.callout.weight(.semibold))
-                        Text("點這裡查看並更新").font(.caption).foregroundStyle(.secondary)
+                        Text("點這裡查看並更新").font(.caption)
                     }
                     Spacer(minLength: 0)
                 }
@@ -104,7 +104,8 @@ struct UpdateAvailableBanner: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .glassEffect(.regular, in: .rect(cornerRadius: 12))
+            // macOS 26 的側邊欄本身就是玻璃：上面用填色，不再疊一層玻璃
+            .background(.fill.tertiary, in: .rect(cornerRadius: 12))
             .padding(10)
             .help("DVR Viewer \(v) 已推出")
             .transition(.move(edge: .bottom).combined(with: .opacity))

@@ -56,19 +56,22 @@ struct PlaybackView: View {
                 ZStack {
                     Color.black.ignoresSafeArea()
                     video
-                    if showControls || voiceOver {
-                        VStack {
-                            Spacer()
-                            VStack(spacing: 6) {
-                                timeline
-                                transport
+                    // 玻璃控制列用「浮現」轉場（淡入淡出會留下霧濛濛的殘影）
+                    GlassEffectContainer {
+                        if showControls || voiceOver {
+                            VStack {
+                                Spacer()
+                                VStack(spacing: 6) {
+                                    timeline
+                                    transport(onGlass: true)
+                                }
+                                .padding(12)
+                                .glassEffect(in: .rect(cornerRadius: 20))
+                                .glassEffectTransition(.materialize)
+                                .padding(.horizontal)
+                                .padding(.bottom, 8)
                             }
-                            .padding(12)
-                            .glassEffect(in: .rect(cornerRadius: 20))
-                            .padding(.horizontal)
-                            .padding(.bottom, 8)
                         }
-                        .transition(.opacity)
                     }
                 }
                 .contentShape(.rect)
@@ -88,7 +91,7 @@ struct PlaybackView: View {
                         dayBar.frame(maxWidth: 300)
                         Spacer()
                         skipBack
-                        playButton
+                        playButton()
                         skipForward
                         Spacer()
                         HStack(spacing: 4) {
@@ -111,7 +114,7 @@ struct PlaybackView: View {
                         .padding(.horizontal)
                         .layoutPriority(1)   // 下方清單不可擠壓影像
                     timeline.padding(.horizontal)
-                    transport.padding(.horizontal)
+                    transport().padding(.horizontal)
                     HStack(spacing: 0) {
                         dayControls
                         Spacer()
@@ -273,13 +276,14 @@ struct PlaybackView: View {
         }
     }
 
-    private var transport: some View {
+    /// onGlass：放在玻璃控制列上時，播放鍵改用實心填色（不疊玻璃）
+    private func transport(onGlass: Bool = false) -> some View {
         HStack {
             speedMenu
             Spacer()
             skipBack
             Spacer()
-            playButton
+            playButton(onGlass: onGlass)
             Spacer()
             skipForward
             Spacer()
@@ -314,13 +318,15 @@ struct PlaybackView: View {
             .accessibilityLabel("前進 10 秒")
     }
 
-    private var playButton: some View {
-        Button { togglePlay() } label: {
+    @ViewBuilder private func playButton(onGlass: Bool = false) -> some View {
+        let b = Button { togglePlay() } label: {
             Image(systemName: playing ? "pause.fill" : "play.fill")
                 .font(.title)
                 .frame(width: 56, height: 56)
         }
-        .buttonStyle(.glass)
+        Group {
+            if onGlass { b.buttonStyle(.borderedProminent) } else { b.buttonStyle(.glass) }
+        }
         .buttonBorderShape(.circle)
         .accessibilityLabel(playing ? "暫停" : "播放")
     }

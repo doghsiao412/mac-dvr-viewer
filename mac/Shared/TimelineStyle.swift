@@ -121,3 +121,25 @@ enum TimelineStyle {
         return "\(Int(s)) 秒"
     }
 }
+
+import SwiftUI
+
+extension View {
+    /// 影片上的資訊標籤（攝影機名稱、時間）：半透明深色底＋白字。
+    /// 資訊屬於內容層，不用 Liquid Glass；深色底在亮畫面上也看得清楚。
+    func videoLabelStyle() -> some View {
+        self
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(.black.opacity(0.55), in: .capsule)
+            .environment(\.colorScheme, .dark)
+    }
+
+    /// 影片上的狀態與錯誤訊息（連線中、離線、播放結束…）：系統材質底，固定深色外觀。
+    /// 狀態訊息屬於內容層，不用 Liquid Glass。
+    func videoStatusBackground<S: Shape>(_ shape: S) -> some View {
+        self
+            .background(.regularMaterial, in: shape)
+            .environment(\.colorScheme, .dark)
+    }
+}

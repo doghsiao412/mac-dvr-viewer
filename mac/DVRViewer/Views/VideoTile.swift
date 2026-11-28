@@ -42,10 +42,12 @@ struct VideoTile: View {
         .overlay(alignment: .bottomLeading) { nameBar }
         .overlay(alignment: .topTrailing) { if hovering { tileButtons } }
         .overlay(alignment: .bottomTrailing) {
-            if showPTZ && canPTZ {
-                PTZPad(connection: device.connection, channelID: ref.channelID) { store.showToast($0) }
-                    .padding(10)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottomTrailing)))
+            // 玻璃面板用「浮現」轉場出現與消失（淡入淡出會留下霧濛濛的殘影）
+            GlassEffectContainer {
+                if showPTZ && canPTZ {
+                    PTZPad(connection: device.connection, channelID: ref.channelID) { store.showToast($0) }
+                        .padding(10)
+                }
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tileWidth = $0 }
@@ -99,7 +101,7 @@ struct VideoTile: View {
         } else {
             switch controller.phase {
             case .connecting, .idle:
-                ProgressView().controlSize(.small).padding(10).glassEffect(.regular, in: .circle)
+                ProgressView().controlSize(.small).padding(10).videoStatusBackground(Circle())
             case .reconnecting(let why):
                 VStack(spacing: 4) {
                     ProgressView().controlSize(.small)
@@ -107,7 +109,7 @@ struct VideoTile: View {
                     Text(why).font(.caption2).lineLimit(2).multilineTextAlignment(.center)
                 }
                 .padding(10)
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
+                .videoStatusBackground(RoundedRectangle(cornerRadius: 14))
             case .undecodable(let why):
                 VStack(spacing: 4) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
@@ -116,7 +118,7 @@ struct VideoTile: View {
                 }
                 .padding(10)
                 .frame(maxWidth: 260)
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
+                .videoStatusBackground(RoundedRectangle(cornerRadius: 14))
             case .playing:
                 EmptyView()
             }
@@ -127,7 +129,7 @@ struct VideoTile: View {
         Label(text, systemImage: symbol)
             .font(.caption)
             .padding(.horizontal, 10).padding(.vertical, 5)
-            .glassEffect(.regular, in: .capsule)
+            .videoStatusBackground(Capsule())
     }
 
     private var nameBar: some View {
@@ -136,13 +138,12 @@ struct VideoTile: View {
             if audioOn { Image(systemName: "speaker.wave.2.fill").foregroundStyle(.yellow) }
             if mainStream && store.advancedFeatures { Text("主").font(.caption2.weight(.semibold)).foregroundStyle(.tint) }
             if let t = controller.lastFrameTime {
-                Text(t, format: .dateTime.hour().minute().second()).monospacedDigit().foregroundStyle(.secondary)
+                Text(t, format: .dateTime.hour().minute().second()).monospacedDigit().foregroundStyle(.white.opacity(0.85))
             }
             if zoom > 1.01 { Text(String(format: "%.1f×", zoom)).foregroundStyle(.yellow) }
         }
         .font(.caption)
-        .padding(.horizontal, 10).padding(.vertical, 4)
-        .glassEffect(.regular, in: .capsule)
+        .videoLabelStyle()
         .padding(6)
         .allowsHitTesting(false)
     }

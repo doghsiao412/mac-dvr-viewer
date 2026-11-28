@@ -94,23 +94,28 @@ struct PlaybackView: View {
     private var immersiveBody: some View {
         video
             .ignoresSafeArea()
+            // 玻璃控制列用「浮現」轉場出現與消失（淡入淡出會留下霧濛濛的殘影）
             .overlay(alignment: .top) {
-                if chrome.visible {
-                    header
-                        .padding(.horizontal, 16).padding(.vertical, 8)
-                        .glassEffect(.regular, in: .capsule)
-                        .padding(.top, 12).padding(.horizontal, 16)
-                        .onHover { chrome.pinned = $0 }
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                GlassEffectContainer {
+                    if chrome.visible {
+                        header
+                            .padding(.horizontal, 16).padding(.vertical, 8)
+                            .glassEffect(.regular, in: .capsule)
+                            .glassEffectTransition(.materialize)
+                            .padding(.top, 12).padding(.horizontal, 16)
+                            .onHover { chrome.pinned = $0 }
+                    }
                 }
             }
             .overlay(alignment: .bottom) {
-                if chrome.visible {
-                    controls
-                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
-                        .padding(.horizontal, 16).padding(.bottom, 16)
-                        .onHover { chrome.pinned = $0 }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                GlassEffectContainer {
+                    if chrome.visible {
+                        controls
+                            .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                            .glassEffectTransition(.materialize)
+                            .padding(.horizontal, 16).padding(.bottom, 16)
+                            .onHover { chrome.pinned = $0 }
+                    }
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: chrome.visible)
@@ -210,11 +215,10 @@ struct PlaybackView: View {
                 VideoSurface(renderer: sub.renderer, aspect: aspect)
                     .overlay(alignment: .bottomLeading) {
                         Text(store.name(of: ref)).font(.caption).fontWeight(.medium)
-                            .padding(.horizontal, 10).padding(.vertical, 4)
-                            .glassEffect(.regular, in: .capsule).padding(6)
+                            .videoLabelStyle().padding(6)
                     }
                     .overlay {
-                        if sub.phase == .loading { ProgressView().controlSize(.small).padding(10).glassEffect(.regular, in: .circle) }
+                        if sub.phase == .loading { ProgressView().controlSize(.small).padding(10).videoStatusBackground(Circle()) }
                     }
             } else {
                 VStack(spacing: 6) {
@@ -255,14 +259,14 @@ struct PlaybackView: View {
         } else if loadingRanges {
             ProgressView("查詢錄影中…")
                 .padding(16)
-                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .videoStatusBackground(RoundedRectangle(cornerRadius: 16))
         } else if let e = rangeError {
             message("查詢錄影失敗", e, "exclamationmark.triangle")
         } else if ranges.isEmpty {
             noRecordingView
         } else if store.playbackLayout == 1 {
             switch controller.phase {
-            case .loading: ProgressView().padding(14).glassEffect(.regular, in: .circle)
+            case .loading: ProgressView().padding(14).videoStatusBackground(Circle())
             case .ended: message("播放結束", "點選時間軸繼續播放其他時段", "stop.circle")
             case .failed(let e): message("播放錯誤", e, "exclamationmark.triangle")
             case .idle: message("點選時間軸開始播放", "", "hand.tap")
@@ -303,7 +307,7 @@ struct PlaybackView: View {
             }
         }
         .padding(20)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .videoStatusBackground(RoundedRectangle(cornerRadius: 20))
     }
 
     private func message(_ title: String, _ detail: String, _ symbol: String) -> some View {
@@ -313,7 +317,7 @@ struct PlaybackView: View {
             if !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center) }
         }
         .padding(18)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .videoStatusBackground(RoundedRectangle(cornerRadius: 20))
     }
 
     // MARK: - 下方：時間軸與控制
@@ -425,7 +429,7 @@ struct PlaybackView: View {
                     .font(.title2)
                     .frame(width: 36, height: 36)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)   // 放在玻璃控制面板上：用實心填色，不疊玻璃
             .buttonBorderShape(.circle)
             .help("播放／暫停（空白鍵）")
             .keyboardShortcut(.space, modifiers: [])
